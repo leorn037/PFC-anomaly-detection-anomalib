@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 import socket
 import pickle
+import cv2
 from anomalib.data.utils import TestSplitMode
 
 # --- Mapeamento de Modelos e Parâmetros ---
@@ -21,7 +22,7 @@ MODEL_CONFIGS = {
         "params": {
             "backbone": "resnet10t", 
             "layers": ("layer2", "layer3"), # ["blocks.2", "blocks.4"]
-            "coreset_sampling_ratio": 0.05,
+            "coreset_sampling_ratio": 0.1,
             "num_neighbors": 9
         },
         "inference_params": {
@@ -31,9 +32,10 @@ MODEL_CONFIGS = {
     "Padim": {
         "class": Padim,
         "params": {
-            "backbone": "resnet18",
+            "backbone": "resnet10t",
             "layers": ["layer1", "layer2", "layer3"],
-            "pre_trained": True
+            "n_features": 100, #resnet18=100
+            "pre_trained": True,
         },
         "inference_params": {
             # Padim não precisa de `load_from_checkpoint`
@@ -147,7 +149,7 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
         test_split_mode=TestSplitMode.SYNTHETIC, # The Folder datamodule will create training, validation, test and prediction datasets and dataloaders for us.
         #abnormal_dir=config["abnormal_test_dir"], # Imagens anômalas para teste
         #normal_test_dir=config["normal_test_dir"], # Imagens normais para teste
-        num_workers=4,
+        num_workers=0,
         train_batch_size=config["batch_size"],
         augmentations=transform
     )
@@ -269,7 +271,7 @@ def predict_image(model, image, transform, image_size):
     # pred_score é um tensor (1,)
     pred_score = predictions.pred_score.cpu().item()
     pred_mask = predictions.pred_mask.cpu().squeeze().numpy().astype(np.uint8) * 255 # Converte True/False para 0/255 para visualização
-    return image, anomaly_map, pred_score, pred_mask
+    return np.array(image), anomaly_map, pred_score, pred_mask
 
 def visualize_imgs(path_dir, model, img_class,image_size):
     
@@ -330,8 +332,6 @@ def live_inference_opencv(model, image_size):
         image_size (int): O tamanho para redimensionar a imagem de entrada do modelo.
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
-    import cv2
-
     # 1. Configuração da Câmera
     cap = cv2.VideoCapture(0)  # 0 geralmente se refere à câmera padrão do sistema
     if not cap.isOpened():
@@ -355,15 +355,12 @@ def live_inference_opencv(model, image_size):
                 print(f"{Colors.RED}Erro: Não foi possível ler o frame da câmera. Saindo...{Colors.RESET}")
                 break
 
-            # Clona o frame original para exibir ao lado do mapa de anomalia
-            original_frame_display = frame.copy() 
-
             # Converter o frame OpenCV (BGR) para PIL RGB para o modelo
             frame_rgb_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
             start_time=time.time()
             original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
-            print(f"Tempo: {time.time()-start_time:.4f}")
+            print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.5)} / Area: {check_for_anomaly_by_area(pred_mask, 100)}")
 
             # Pós-processamento para visualização com OpenCV:
             # Redimensiona o mapa de anomalia para o tamanho do frame original
@@ -377,7 +374,7 @@ def live_inference_opencv(model, image_size):
             anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
 
             # Adiciona o score na imagem original para display
-            cv2.putText(original_frame_display, 
+            cv2.putText(original_img, 
                         f"Score: {pred_score:.4f}", 
                         (10, 30), # Posição do texto
                         cv2.FONT_HERSHEY_SIMPLEX, 
@@ -387,13 +384,13 @@ def live_inference_opencv(model, image_size):
 
             # Concatena as imagens horizontalmente para exibir lado a lado
             # Certifique-se de que ambas as imagens tenham a mesma altura antes de concatenar
-            # if anomaly_map_colored.shape[0] != original_frame_display.shape[0]:
+            # if anomaly_map_colored.shape[0] != original_img.shape[0]:
             #     # Isso não deve acontecer se redimensionamos corretamente, mas é uma verificação de segurança
-            #     min_height = min(anomaly_map_colored.shape[0], original_frame_display.shape[0])
-            #     original_frame_display = cv2.resize(original_frame_display, (original_frame_display.shape[1], min_height))
+            #     min_height = min(anomaly_map_colored.shape[0], original_img.shape[0])
+            #     original_img = cv2.resize(original_img, (original_img.shape[1], min_height))
             #     anomaly_map_colored = cv2.resize(anomaly_map_colored, (anomaly_map_colored.shape[1], min_height))
 
-            combined_frame = np.hstack((original_frame_display, anomaly_map_colored))
+            combined_frame = np.hstack((original_img, anomaly_map_colored))
 
             # 4. Visualização
             cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
@@ -419,7 +416,6 @@ def live_inference_rasp(model, image_size,use_websoket):
         image_size (int): O tamanho para redimensionar a imagem de entrada do modelo.
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
-    import cv2
     from picamera2 import Picamera2
 
     # 1. Configuração da Câmera
@@ -431,7 +427,6 @@ def live_inference_rasp(model, image_size,use_websoket):
 
     # Inicia a câmera e espera ficar estabilizada
     picam2.start()
-    time.sleep(1)
 
     # 2. Pré-processamento: As mesmas transformações usadas no treinamento/inferência do dataset
     transform_for_model = v2.Compose([
@@ -460,9 +455,6 @@ def live_inference_rasp(model, image_size,use_websoket):
         while True:
             # Captura um frame da câmera como um array
             frame = picam2.capture_array()
-
-            # Clona o frame original para exibir ao lado do mapa de anomalia
-            original_frame_display = frame.copy() 
 
             # Converter o frame OpenCV (BGR) para PIL RGB para o modelo
             frame_rgb_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -506,7 +498,7 @@ def live_inference_rasp(model, image_size,use_websoket):
                 time.sleep(0.1)
             else:
                 # Adiciona o score na imagem original para display
-                cv2.putText(original_frame_display, 
+                cv2.putText(original_img, 
                             f"Score: {pred_score:.4f}", 
                             (10, 30), # Posição do texto
                             cv2.FONT_HERSHEY_SIMPLEX, 
@@ -514,7 +506,7 @@ def live_inference_rasp(model, image_size,use_websoket):
                             (0, 255, 0), # Cor verde (BGR)
                             2)        # Espessura da linha
 
-                combined_frame = np.hstack((original_frame_display, anomaly_map_colored))
+                combined_frame = np.hstack((original_img, anomaly_map_colored))
 
                 # 4. Visualização
                 cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
@@ -525,10 +517,41 @@ def live_inference_rasp(model, image_size,use_websoket):
                     break
 
     except KeyboardInterrupt:
-        print(f"{Colors.YELLOW}Ctrl+C detectado. Encerrando o envio.{Colors.RESET}")
+        print(f"{Colors.YELLOW}Ctrl+C detectado. Encerrando ...{Colors.RESET}")
     except Exception as e:
         print(f"{Colors.RED}Ocorreu um erro durante o envio ou inferência: {e}{Colors.RESET}")
     finally:
         picam2.stop()
         sock.close()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
+
+# Abordagem é a mais simples.
+# Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.
+def check_for_anomaly_by_score(pred_score: float, threshold: float = 0.5) -> bool:
+    """
+    Verifica se uma imagem contém anomalias com base em seu score de anomalia.
+
+    Args:
+        pred_score: O score de anomalia da imagem inteira.
+        threshold: O limiar para classificar uma imagem como anômala.
+
+    Returns:
+        True se a imagem for anômala, False caso contrário.
+    """
+    return pred_score > threshold
+
+# Mais sensível a anomalias localizadas, independentemente do score total da imagem.
+# Pode ser sensível a ruído, detectando pequenos grupos de pixels anômalos que não representam um defeito real.
+def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 100) -> bool:
+    """
+    Verifica se a área de anomalia na máscara é maior que um limiar de pixels.
+
+    Args:
+        pred_mask: A máscara de anomalia binária.
+        min_area_threshold: O número mínimo de pixels de anomalia para classificar.
+
+    Returns:
+        True se a área de anomalia for maior que o limiar, False caso contrário.
+    """
+    anomaly_pixels = np.sum(pred_mask > 0)
+    return anomaly_pixels > min_area_threshold

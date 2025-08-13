@@ -21,14 +21,14 @@ config = {
     "normal_test_dir": "data/test/normal", # Imagens normais para teste
 
     # Model configs
-    "model_name": 'PatchCore',
+    "model_name": 'DFM',
     # "mobilenet_v2" "wide_resnet50_2", "resnet18" efficientnet_b0 com layers ["blocks.2", "blocks.4"]
-    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v94/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
+    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",
 
     # 
-    "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
+    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
     "live" : True,
     "rasp" : False,
     "websocket" : True,

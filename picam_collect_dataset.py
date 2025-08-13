@@ -126,6 +126,7 @@ def collect_and_split_dataset(
     last_capture_auto = init_time
     saved_auto_count = 0
     saved_manual_count = 0
+    saving = is_headless
 
     try:
         while True:
@@ -139,7 +140,7 @@ def collect_and_split_dataset(
             current_time = time.time()
 
             # Lógica para captura automática de imagens
-            if saved_auto_count < total_frames_to_collect and (current_time - last_capture_auto >= time_sample):
+            if saving and saved_auto_count < total_frames_to_collect and (current_time - last_capture_auto >= time_sample):
                 timestamp = int(time.time() * 1000)
                 filename = os.path.join(raw_path, f"auto_img_{saved_auto_count:04d}_{timestamp}.jpg")
                 cv2.imwrite(filename, frame_bgr)
@@ -160,6 +161,10 @@ def collect_and_split_dataset(
                     cv2.imwrite(filename, frame_bgr)
                     saved_manual_count += 1
                     print(f"[{int(current_time - init_time)}s] {Colors.YELLOW}MANUAL salvo: {Path(filename).name} ({saved_manual_count} manuais){Colors.RESET}")
+                elif key == ord('c') and not saving:
+                    saving = True
+                    last_capture_auto = time.time() # Reseta o timer para o início
+                    print(f"{Colors.GREEN}{Colors.BOLD}Início da coleta automática de imagens!{Colors.RESET}")
                 elif key == ord('q'):
                     print(f"{Colors.YELLOW}Saindo da coleta de imagens.{Colors.RESET}")
                     break
