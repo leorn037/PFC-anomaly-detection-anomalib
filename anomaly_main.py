@@ -1,14 +1,14 @@
 from pathlib import Path
 import matplotlib.pyplot as plt
 import time
-start_time = time.time()
+init_time = time.time()
 from functions import *
 from picam_collect_dataset import collect_and_split_dataset
 
 config = {
     # Collecting images configs
     "collect" : False,
-    "time_sample" : 0.5,
+    "time_sample" : 0.2,
     "img_n" : 100,
 
     # Dataset configs
@@ -23,15 +23,15 @@ config = {
     # Model configs
     "model_name": 'PatchCore',
     # "mobilenet_v2" "wide_resnet50_2", "resnet18" efficientnet_b0 com layers ["blocks.2", "blocks.4"]
-    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/Fre/Test/v1/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
+    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v94/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",
 
     # 
-    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
     "live" : True,
     "rasp" : False,
-    "webscoket" : True,
+    "websocket" : True,
 }
 
 def main():
@@ -98,7 +98,7 @@ def main():
 
 
 if __name__ == "__main__":
-    print(f"{Colors.BLUE}Bibliotecas importadas em {time.time()-start_time:.2f} segundos.{Colors.RESET}")
+    print(f"{Colors.BLUE}Bibliotecas importadas em {time.time()-init_time:.2f} segundos.{Colors.RESET}")
     import warnings
     import os
 

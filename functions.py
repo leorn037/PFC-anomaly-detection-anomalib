@@ -19,7 +19,7 @@ MODEL_CONFIGS = {
     "PatchCore": {
         "class": Patchcore,
         "params": {
-            "backbone": "resnet18", 
+            "backbone": "resnet10t", 
             "layers": ("layer2", "layer3"), # ["blocks.2", "blocks.4"]
             "coreset_sampling_ratio": 0.05,
             "num_neighbors": 9

@@ -52,14 +52,8 @@ except ImportError:
         return frame
 
 def has_gui():
-    """Tenta verificar se há uma interface gráfica disponível."""
-    try:
-        # Tenta criar uma janela do OpenCV
-        cv2.namedWindow("Test", cv2.WINDOW_NORMAL)
-        cv2.destroyWindow("Test")
-        return True
-    except cv2.error:
-        return False
+    """Verifica se há uma interface gráfica disponível."""
+    return 'DISPLAY' in os.environ and not os.environ['DISPLAY'] == ''
 
 def collect_and_split_dataset(
     output_base_dir: str = "data",
