@@ -34,7 +34,7 @@ MODEL_CONFIGS = {
         "params": {
             "backbone": "resnet18", 
             "layers": ("layer2", "layer3"), # ["blocks.2", "blocks.4"]
-            "coreset_sampling_ratio": 0.1,
+            "coreset_sampling_ratio": 0.05,
             "num_neighbors": 9
         },
         "inference_params": {
@@ -75,7 +75,17 @@ MODEL_CONFIGS = {
 
         }
     },
-    
+        "STFPM":{
+        "class": Stfpm,
+        "params": {
+                "backbone": "resnet18",
+                "layers": ["layer1", "layer2", "layer3"]
+        },
+        "inference_params": {
+
+        }
+    },
+
     "FastFlow": {
         "class": Fastflow,
         "params": {
@@ -99,16 +109,7 @@ MODEL_CONFIGS = {
             # opcional para esta classe e o `load_from_checkpoint` cuida disso
         }
     },
-    "STFPM":{
-        "class": Stfpm,
-        "params": {
-                "backbone": "resnet18",
-                "layers": ["layer1", "layer2", "layer3"]
-        },
-        "inference_params": {
 
-        }
-    },
     "EfficientAd": {
         "class": EfficientAd,
         "params":{},
@@ -134,6 +135,11 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
     
     image_size = config["image_size"] # Defina o tamanho da imagem para redimensionamento
 
+    transform= v2.Compose([
+        v2.Resize((image_size, image_size)),
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
     datamodule = Folder(
         name=config["folder_name"],
         root=None,
@@ -142,7 +148,8 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
         #abnormal_dir=config["abnormal_test_dir"], # Imagens anômalas para teste
         #normal_test_dir=config["normal_test_dir"], # Imagens normais para teste
         num_workers=4,
-        train_batch_size=config["batch_size"]
+        train_batch_size=config["batch_size"],
+        augmentations=transform
     )
     datamodule.setup() # Carrega os datasets
 
@@ -215,6 +222,7 @@ def train_model(model, datamodule, config): # Encapsula a lógica de treinamento
     start_time = time.time() # Registra o tempo de início
 
     engine = Engine(logger=False,accelerator="auto", max_epochs=10)
+    #trainer = Trainer(devices=4, accelerator="gpu", strategy="ddp")
 
     if config["operation"] == "New": ckpt_path = None
     elif config["operation"] == "Continue": ckpt_path = config["ckpt_path"]
@@ -403,7 +411,7 @@ def live_inference_opencv(model, image_size):
         cap.release() # Libera a câmera
         cv2.destroyAllWindows() # Fecha todas as janelas do OpenCV
 
-def live_inference_rasp(model, image_size):
+def live_inference_rasp(model, image_size,use_websoket):
     """
     Realiza inferência em tempo real usando a Raspberry.
 
@@ -436,7 +444,7 @@ def live_inference_rasp(model, image_size):
     model.eval() # Coloca o modelo em modo de avaliação
 
     # 3. Configuração do Socket para Envio
-    use_websoket=True
+    
     if use_websoket:
         # --- Configurações UDP ---
         UDP_IP = "192.168.15.4" # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.

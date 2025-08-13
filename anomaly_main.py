@@ -13,12 +13,15 @@ config = {
     "abnormal_test_dir": "data/test/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "data/test/normal", # Imagens normais para teste
 
-    "model_name": 'PatchCore',
+    "model_name": 'FRE',
     # "mobilenet_v2" "wide_resnet50_2", "resnet18" efficientnet_b0 com layers ["blocks.2", "blocks.4"]
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/Fre/Test/v1/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     "export_type": "onnx",
     "operation" : 'New', # Operação com modelo ('Inference','New','Continue')
-    "live" : False,
+    "live" : True,
+
+    "rasp" : True,
+    "webscoket" : True,
 }
 
 def main():
@@ -57,7 +60,10 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-        live_inference_opencv(model, config["image_size"])
+        if config["rasp"]:
+            live_inference_rasp(model, config["image_size"],config["websocket"])
+        else: 
+            live_inference_opencv(model, config["image_size"])
     else:
         #normal_dir = dataset_root / "test" / "normal"
         normal_dir = Path(config["normal_dir"])
