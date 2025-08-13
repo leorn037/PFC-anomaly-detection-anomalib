@@ -3,8 +3,15 @@ import matplotlib.pyplot as plt
 import time
 start_time = time.time()
 from functions import *
+from picam_collect_dataset import collect_and_split_dataset
 
 config = {
+    # Collecting images configs
+    "collect" : False,
+    "time_sample" : 0.5,
+    "img_n" : 100,
+
+    # Dataset configs
     "dataset_root": '.',
     "image_size": 256, # Defina o tamanho da imagem para redimensionamento
     "batch_size": 8,
@@ -13,20 +20,32 @@ config = {
     "abnormal_test_dir": "data/test/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "data/test/normal", # Imagens normais para teste
 
-    "model_name": 'FRE',
+    # Model configs
+    "model_name": 'PatchCore',
     # "mobilenet_v2" "wide_resnet50_2", "resnet18" efficientnet_b0 com layers ["blocks.2", "blocks.4"]
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/Fre/Test/v1/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
+    
     "export_type": "onnx",
-    "operation" : 'New', # Operação com modelo ('Inference','New','Continue')
-    "live" : True,
 
-    "rasp" : True,
+    # 
+    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "live" : True,
+    "rasp" : False,
     "webscoket" : True,
 }
 
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     # 1. Prepare dataset:
+    if config["collect"]: # Novo dataset
+        collect_and_split_dataset(
+            output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
+            capture_dir=config["normal_dir"], # Pasta para salvar as imagens brutas da câmera
+            time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
+            total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
+            image_size=config["image_size"]
+        )
+
     dataset_root = Path(config["dataset_root"])
     datamodule = setup_datamodule(config, dataset_root)
 

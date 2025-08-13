@@ -4,10 +4,52 @@ import os
 import random
 import shutil
 from pathlib import Path
-from picamera2 import Picamera2
-from libcamera import controls
-
 from functions import Colors
+
+
+try:
+    from picamera2 import Picamera2
+
+    # Se a importação for bem-sucedida, configure a câmera da Raspberry Pi
+    print("Usando a câmera da Raspberry Pi.")
+    # Aqui vai a sua lógica de setup para a picamera2
+    def setup_camera(image_size):
+        picam2 = Picamera2()
+        # Configurações para a preview e captura de imagem
+        config = picam2.create_video_configuration(main={"size": (image_size, image_size)})
+        picam2.configure(config)
+        picam2.start()
+
+        # Atraso para a câmera estabilizar
+        # time.sleep(2)
+
+        # Opcional: Desabilitar o controle automático de exposição e ganho para consistência de imagens
+        # picam2.set_controls({"AeEnable": False, "AwbEnable": False})
+
+        return picam2
+
+    def get_frame(camera,image_size):
+        # Lógica para pegar o frame da picamera2
+        frame = camera.capture_array()
+        # Converte a imagem de RGB para BGR para ser compatível com o OpenCV
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        return frame_bgr
+    
+except ImportError:
+    # --- Bloco executado se as bibliotecas da Raspberry Pi não existirem ---
+    print("Usando a câmera do PC com OpenCV.")
+    
+    # Use as suas funções originais para a câmera do PC
+    def setup_camera(image_size):
+        return cv2.VideoCapture(0)
+
+    def get_frame(camera,image_size):
+        ret, frame = camera.read()
+        if not ret:
+            print(f"{Colors.RED}Erro: Não foi possível ler o frame. A câmera pode ter sido desconectada ou ter um problema. Saindo da coleta.{Colors.RESET}")
+            return None
+        frame=cv2.resize(frame, (image_size, image_size))
+        return frame
 
 def has_gui():
     """Tenta verificar se há uma interface gráfica disponível."""
@@ -22,9 +64,7 @@ def has_gui():
 def collect_and_split_dataset(
     output_base_dir: str = "data",
     capture_dir: str = "temp_images", # Para imagens normais automáticas
-    train_ratio: float = 0.8,
-    camera_idx: int = 0,
-    time_sample: float = 0.5,  # Salvar um frame a cada X segundos
+    time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
     image_size: int = 256
 ):
@@ -81,22 +121,12 @@ def collect_and_split_dataset(
 
 
     # --- Configuração da Câmera com picamera2 ---
-    try:
-        picam2 = Picamera2()
-        # Configurações para a preview e captura de imagem
-        config = picam2.create_preview_configuration(main={"size": (image_size, image_size)})
-        picam2.configure(config)
-        picam2.start()
-        # Atraso para a câmera estabilizar
-        time.sleep(2)
-        
-        # Opcional: Desabilitar o controle automático de exposição e ganho para consistência de imagens
-        # picam2.set_controls({"AeEnable": False, "AwbEnable": False})
-
-    except Exception as e:
+    camera = setup_camera(image_size)
+    if camera is None:
         print(f"{Colors.RED}Erro: Não foi possível iniciar a câmera da Raspberry Pi. Detalhes: {e}{Colors.RESET}")
         print(f"{Colors.RED}Verifique a conexão da câmera e se a biblioteca picamera2 está instalada.{Colors.RESET}")
         return
+
 
     init_time = time.time()
     last_capture_auto = init_time
@@ -106,10 +136,11 @@ def collect_and_split_dataset(
     try:
         while True:
             # Captura a imagem da câmera
-            frame = picam2.capture_array()
+            frame_bgr = get_frame(camera,image_size)
 
-            # Converte a imagem de RGB para BGR para ser compatível com o OpenCV
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            if frame_bgr is None:
+                print("Erro: Não foi possível ler o frame.")
+                break
 
             current_time = time.time()
 
@@ -117,7 +148,7 @@ def collect_and_split_dataset(
             if saved_auto_count < total_frames_to_collect and (current_time - last_capture_auto >= time_sample):
                 timestamp = int(time.time() * 1000)
                 filename = os.path.join(raw_path, f"auto_img_{saved_auto_count:04d}_{timestamp}.jpg")
-                cv2.imwrite(filename, frame)
+                cv2.imwrite(filename, frame_bgr)
                 print(f"[{int(current_time - init_time)}s] {Colors.GREEN}AUTO salvo: {Path(filename).name}{Colors.RESET}")
                 saved_auto_count += 1
                 last_capture_auto = current_time
@@ -132,7 +163,7 @@ def collect_and_split_dataset(
                 if key == ord('s'):
                     timestamp = int(time.time() * 1000)
                     filename = os.path.join(raw_path, f"manual_img_{saved_manual_count:04d}_{timestamp}.jpg")
-                    cv2.imwrite(filename, frame)
+                    cv2.imwrite(filename, frame_bgr)
                     saved_manual_count += 1
                     print(f"[{int(current_time - init_time)}s] {Colors.YELLOW}MANUAL salvo: {Path(filename).name} ({saved_manual_count} manuais){Colors.RESET}")
                 elif key == ord('q'):
@@ -144,9 +175,17 @@ def collect_and_split_dataset(
                 print(f"{Colors.YELLOW}Total de frames automáticos atingido ({total_frames_to_collect}). Pressione 's' para salvar manualmente ou 'q' para finalizar.{Colors.RESET}")
                 # Uma vez que o limite automático é atingido, resetamos a condição para que ele não tente mais salvar automaticamente
                 total_frames_to_collect = -1 # Garante que a condição 'saved_auto_count < total_frames_to_collect' seja falsa
+                break
     finally:
-        picam2.stop()
-        cv2.destroyAllWindows()
+        # AQUI está a lógica para parar a câmera corretamente
+        if isinstance(camera, cv2.VideoCapture):
+            # Se for a câmera do PC, use release()
+            camera.release()
+        else:
+            # Se for a câmera da Raspberry Pi, use stop()
+            # Precisamos verificar se o objeto camera tem o método stop
+            if hasattr(camera, 'stop'):
+                camera.stop()
 
     print(f"{Colors.BOLD}{Colors.GREEN}\nColeta de imagens concluída!{Colors.RESET}")
     print(f"{Colors.BLUE}Foram coletadas {saved_auto_count} imagens automáticas e {saved_manual_count} imagens manuais.{Colors.RESET}")
@@ -175,9 +214,7 @@ if __name__ == "__main__":
     collect_and_split_dataset(
         output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
         capture_dir="temp_images", # Pasta para salvar as imagens brutas da câmera
-        train_ratio=1.0,                        # 80% das imagens normais para treino, 20% para teste
-        camera_idx=0,                           # O índice da sua câmera (0 é a padrão, tente 1, 2, etc. se tiver várias)
-        time_sample=0.5,                       # Salvar um frame normal automaticamente a cada 0.5 segundos
+        time_sample=0.1,                       # Salvar um frame normal automaticamente a cada 0.5 segundos
         total_frames_to_collect=100,             # Parar a coleta automática de normais após 200 frames
         image_size=256
     )

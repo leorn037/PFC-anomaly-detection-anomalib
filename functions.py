@@ -13,19 +13,6 @@ import socket
 import pickle
 from anomalib.data.utils import TestSplitMode
 
-class Colors:
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    MAGENTA = '\033[35m'
-    CYAN = '\033[36m'
-    WHITE = '\033[37m'
-    BG_RED = '\033[41m'
-    BG_GREEN = '\033[42m'
-
 # --- Mapeamento de Modelos e Parâmetros ---
 # Este dicionário centraliza todas as configurações dos modelos
 MODEL_CONFIGS = {
@@ -56,7 +43,7 @@ MODEL_CONFIGS = {
     "DFM": {
         "class": Dfm,
         "params": {
-            "backbone": "resnet50", #resnet50
+            "backbone": "resnet18", #resnet50
             "layer": "layer3",
             "pre_trained": True
         },
@@ -85,7 +72,7 @@ MODEL_CONFIGS = {
 
         }
     },
-
+    # ----
     "FastFlow": {
         "class": Fastflow,
         "params": {
@@ -130,6 +117,19 @@ MODEL_CONFIGS = {
         #pooling_kernel_size=2, input_dim=65536, latent_dim=220
     }
 }
+
+class Colors:
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    WHITE = '\033[37m'
+    BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
 
 def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração e retorna o Folder
     
