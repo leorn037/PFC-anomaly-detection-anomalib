@@ -211,8 +211,7 @@ def create_model(config):
         load_time = end_time - start_time
         print(f"{Colors.GREEN} Modelo carregado em {load_time:.2f} segundos.{Colors.RESET}")
     else:
-        print(f"{Colors.RED}{Colors.BOLD}AVISO: Checkpoint '{ckp_path}' não encontrado para inferência. "
-              "Não será possível realizar a inferência. Verifique o caminho.{Colors.RESET}")
+        print(f"{Colors.RED}{Colors.BOLD}AVISO: Checkpoint '{ckp_path}' não encontrado para inferência. Não será possível realizar a inferência. Verifique o caminho.{Colors.RESET}")
         return None
     
     return model
@@ -427,7 +426,7 @@ def live_inference_rasp(model, image_size,use_websoket):
     picam2 = Picamera2() # Cria uma instância do controle da câmera
 
     # Configuração de pré-visualização com resolução de 640x480 pixels
-    config = picam2.create_preview_configuration(main={"size": (256, 256), "format": "BGR888"})
+    config = picam2.create_preview_configuration(main={"size": (image_size, image_size), "format": "BGR888"})
     picam2.configure(config)
 
     # Inicia a câmera e espera ficar estabilizada
@@ -447,15 +446,15 @@ def live_inference_rasp(model, image_size,use_websoket):
     
     if use_websoket:
         # --- Configurações UDP ---
-        UDP_IP = "192.168.15.4" # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
+        UDP_IP = "192.168.15.5" # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
         UDP_PORT = 5005        # Porta para onde a Pi vai ENVIAR os dados.
         # Nota: O IP do servidor da Pi é '0.0.0.0' para escutar, mas o cliente precisa do IP real da Pi.
         # Aqui, a Pi é o REMETENTE UDP, então precisa do IP do DESTINATÁRIO (seu PC).
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
 
-    print(f"{Colors.CYAN}Iniciando servidor UDP na Raspberry Pi. Enviando para {UDP_IP}:{UDP_PORT}{Colors.RESET}")
-    print(f"{Colors.GREEN}Iniciando inferência em tempo real na Raspberry. Pressione 'q' para sair.{Colors.RESET}")
+        print(f"{Colors.CYAN}Iniciando servidor UDP na Raspberry Pi. Enviando para {UDP_IP}:{UDP_PORT}{Colors.RESET}")
+        print(f"{Colors.GREEN}Iniciando inferência em tempo real na Raspberry. Pressione 'q' para sair.{Colors.RESET}")
 
     try:
         while True:
