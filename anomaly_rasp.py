@@ -7,6 +7,17 @@ from picam_collect_dataset import collect_and_split_dataset
 from net_func import receive_model_from_pc
 
 config = {
+    # Recebimento de imagens no pc
+    "num_images_to_receive": 100,  # Adicione o número de imagens a receber
+    "receive_port": 5007,          # Porta para receber imagens
+    "pi_port": 5008,       # Porta para enviar o modelo
+    "pi_ip": "192.168.15.5",       # IP da Raspberry Pi
+
+    # Recebimento do modelo pela rasp
+    "receive_model_port" : 5008,
+    "receive_model" : False,
+    "model_output_dir" : "models/received",
+
     # Collecting images configs
     "collect" : False,
     "time_sample" : 0.2,
@@ -23,7 +34,6 @@ config = {
 
     # Model configs
     "model_name": 'DFM',
-    # "mobilenet_v2" "wide_resnet50_2", "resnet18" efficientnet_b0 com layers ["blocks.2", "blocks.4"]
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",
@@ -35,6 +45,7 @@ config = {
     "websocket" : True,
     "udp_ip" : "192.168.15.5"
 }
+
 
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
