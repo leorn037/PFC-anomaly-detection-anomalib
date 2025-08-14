@@ -461,7 +461,7 @@ def live_inference_rasp(model, image_size,use_websoket):
             frame = picam2.capture_array()
 
             # Clona o frame original para exibir ao lado do mapa de anomalia
-            original_frame_display = original_frame_display = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            original_frame_display = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Converter o frame OpenCV (BGR) para PIL RGB para o modelo
             frame_rgb_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -517,6 +517,12 @@ def live_inference_rasp(model, image_size,use_websoket):
 
                 # 4. Visualização
                 cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+                cv2.imshow("1", frame)
+                cv2.imshow("2", original_frame_display)
+                # Salva no disco para comparar
+                cv2.imwrite("bgr_frame.jpg", frame)  # sem conversão
+                cv2.imwrite("rgb_frame.jpg", cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))  # convertido
+
 
                 # Saída ao pressionar 'q'
                 if cv2.waitKey(1) & 0xFF == ord('q'):
