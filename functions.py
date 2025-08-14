@@ -4,7 +4,7 @@ from anomalib.models import Patchcore, Fastflow, ReverseDistillation, Padim, Dfm
 from anomalib.pre_processing import PreProcessor
 import torch # Importar torch para converter imagens para tensor
 import torchvision.transforms.v2 as v2 # Importar transforms para pré-processar imagens
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import time
@@ -457,7 +457,7 @@ def live_inference_rasp(model, image_size,config):
 
     # 3. Configuração do Socket para Envio
     
-    if config["websoket"]:
+    if config["websocket"]:
         # --- Configurações UDP ---
         UDP_IP = config["udp_ip"] # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
         UDP_PORT = 5005        # Porta para onde a Pi vai ENVIAR os dados.
