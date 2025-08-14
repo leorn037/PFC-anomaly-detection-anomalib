@@ -32,9 +32,9 @@ MODEL_CONFIGS = {
     "Padim": {
         "class": Padim,
         "params": {
-            "backbone": "resnet10t",
+            "backbone": "resnet18",
             "layers": ["layer1", "layer2", "layer3"],
-            "n_features": 100, #resnet18=100
+            #"n_features": 100, #resnet18=100
             "pre_trained": True,
         },
         "inference_params": {
@@ -45,7 +45,7 @@ MODEL_CONFIGS = {
     "DFM": {
         "class": Dfm,
         "params": {
-            "backbone": "resnet18", #resnet50
+            "backbone": "resnet50", 
             "layer": "layer3",
             "pre_trained": True
         },
@@ -58,6 +58,7 @@ MODEL_CONFIGS = {
         "params": {
             "backbone": "resnet18",
             "layers": ("layer4",),
+            "n_pca_components": 32,
             "pre_trained": True
         },
         "inference_params": {
@@ -264,14 +265,25 @@ def predict_image(model, image, transform, image_size):
     with torch.no_grad():
         predictions = model.forward(input_tensor.to(model.device))
 
-    # Extraindo o mapa de anomalia e a pontuação
-    # anomaly_map é um tensor (1, 1, H, W) ou (1, H, W)
-    anomaly_map = predictions.anomaly_map.cpu().squeeze().numpy()
-    
     # pred_score é um tensor (1,)
     pred_score = predictions.pred_score.cpu().item()
-    pred_mask = predictions.pred_mask.cpu().squeeze().numpy().astype(np.uint8) * 255 # Converte True/False para 0/255 para visualização
-    return np.array(image), anomaly_map, pred_score, pred_mask
+
+    try:
+        # Se o modelo retornar um mapa de anomalia, use-o
+        anomaly_map = predictions.anomaly_map.cpu().squeeze().numpy()
+    except AttributeError:
+        # Se o modelo NÃO retornar, crie um mapa preto (array de zeros)
+        anomaly_map = np.zeros((image_size, image_size), dtype=np.float32)
+        
+    # 3. Extrair ou criar placeholder para a máscara de anomalia
+    try:
+        # Se o modelo retornar uma máscara, use-a
+        pred_mask = predictions.pred_mask.cpu().squeeze().numpy().astype(np.uint8) * 255
+    except AttributeError:
+        # Se o modelo NÃO retornar, crie uma máscara preta (array de zeros)
+        pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
+    
+    return image, anomaly_map, pred_score, pred_mask
 
 def visualize_imgs(path_dir, model, img_class,image_size):
     
@@ -332,6 +344,7 @@ def live_inference_opencv(model, image_size):
         image_size (int): O tamanho para redimensionar a imagem de entrada do modelo.
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
+    import traceback
     # 1. Configuração da Câmera
     cap = cv2.VideoCapture(0)  # 0 geralmente se refere à câmera padrão do sistema
     if not cap.isOpened():
@@ -405,6 +418,7 @@ def live_inference_opencv(model, image_size):
 
     except Exception as e:
         print(f"{Colors.RED}Ocorreu um erro durante a inferência em tempo real: {e}{Colors.RESET}")
+        traceback.print_exc() 
 
     finally:
         cap.release() # Libera a câmera
