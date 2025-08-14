@@ -363,7 +363,7 @@ def live_inference_opencv(model, image_size):
 
             start_time=time.time()
             original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
-            print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.5)} / Area: {check_for_anomaly_by_area(pred_mask, 100)}")
+            print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.5)} / Area: {check_for_anomaly_by_area(pred_mask, 100, 0.5)}")
 
             # Pós-processamento para visualização com OpenCV:
             # Redimensiona o mapa de anomalia para o tamanho do frame original
@@ -558,7 +558,7 @@ def check_for_anomaly_by_score(pred_score: float, threshold: float = 0.5) -> boo
 
 # Mais sensível a anomalias localizadas, independentemente do score total da imagem.
 # Pode ser sensível a ruído, detectando pequenos grupos de pixels anômalos que não representam um defeito real.
-def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 100) -> bool:
+def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 100, threshold: float = 0.5) -> bool:
     """
     Verifica se a área de anomalia na máscara é maior que um limiar de pixels.
 
@@ -569,5 +569,5 @@ def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 1
     Returns:
         True se a área de anomalia for maior que o limiar, False caso contrário.
     """
-    anomaly_pixels = np.sum(pred_mask > 0)
+    anomaly_pixels = np.sum(pred_mask > threshold)
     return anomaly_pixels > min_area_threshold
