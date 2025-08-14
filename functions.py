@@ -32,8 +32,8 @@ MODEL_CONFIGS = {
     "Padim": {
         "class": Padim,
         "params": {
-            "backbone": "resnet18",
-            "layers": ["layer1", "layer2", "layer3"],
+            "backbone": 'resnet18',
+            "layers": [ "layer2", "layer3"], # "layer1",
             #"n_features": 100, #resnet18=100
             "pre_trained": True,
         },
@@ -53,12 +53,12 @@ MODEL_CONFIGS = {
 
         },
     },
-        "DFKDE": {
+        "DFKDE": { # A nível de imagem, testar com mais imagens
         "class": Dfkde,
         "params": {
             "backbone": "resnet18",
             "layers": ("layer4",),
-            "n_pca_components": 32,
+            "n_pca_components": 16,
             "pre_trained": True
         },
         "inference_params": {
@@ -223,7 +223,7 @@ def train_model(model, datamodule, config): # Encapsula a lógica de treinamento
     
     start_time = time.time() # Registra o tempo de início
 
-    engine = Engine(logger=False,accelerator="auto", max_epochs=10)
+    engine = Engine(logger=False,accelerator="auto", max_epochs=50)
     #trainer = Trainer(devices=4, accelerator="gpu", strategy="ddp")
 
     if config["operation"] == "New": ckpt_path = None
@@ -424,7 +424,7 @@ def live_inference_opencv(model, image_size):
         cap.release() # Libera a câmera
         cv2.destroyAllWindows() # Fecha todas as janelas do OpenCV
 
-def live_inference_rasp(model, image_size,use_websoket):
+def live_inference_rasp(model, image_size,config):
     """
     Realiza inferência em tempo real usando a Raspberry.
 
@@ -457,9 +457,9 @@ def live_inference_rasp(model, image_size,use_websoket):
 
     # 3. Configuração do Socket para Envio
     
-    if use_websoket:
+    if config["websoket"]:
         # --- Configurações UDP ---
-        UDP_IP = "192.168.15.5" # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
+        UDP_IP = config["udp_ip"] # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
         UDP_PORT = 5005        # Porta para onde a Pi vai ENVIAR os dados.
         # Nota: O IP do servidor da Pi é '0.0.0.0' para escutar, mas o cliente precisa do IP real da Pi.
         # Aqui, a Pi é o REMETENTE UDP, então precisa do IP do DESTINATÁRIO (seu PC).
@@ -496,7 +496,7 @@ def live_inference_rasp(model, image_size,use_websoket):
             # Aplica um mapa de cores (heatmap) para melhor visualização
             anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
                         
-            if use_websoket:
+            if config["websoket"]:
                 # Prepara os dados para envio: frame original, mapa colorido e score
                 # Usaremos o frame original (BGR) do OpenCV e o mapa de anomalia colorido
                 _, original_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70]) # Qualidade 70 (0-100)
@@ -549,7 +549,7 @@ def live_inference_rasp(model, image_size,use_websoket):
         print(f"{Colors.RED}Ocorreu um erro durante o envio ou inferência: {e}{Colors.RESET}")
     finally:
         picam2.stop()
-        if use_websoket:
+        if config["websoket"]:
             sock.close()
         if hasattr(cv2, "destroyAllWindows") and os.environ.get("DISPLAY"):
             cv2.destroyAllWindows()
