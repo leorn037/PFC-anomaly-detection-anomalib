@@ -358,6 +358,9 @@ def live_inference_opencv(model, image_size):
             # Converter o frame OpenCV (BGR) para PIL RGB para o modelo
             frame_rgb_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
+            # Clona o frame original para exibir ao lado do mapa de anomalia
+            original_frame_display = frame.copy() 
+
             start_time=time.time()
             original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
             print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.5)} / Area: {check_for_anomaly_by_area(pred_mask, 100)}")
@@ -374,7 +377,7 @@ def live_inference_opencv(model, image_size):
             anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
 
             # Adiciona o score na imagem original para display
-            cv2.putText(original_img, 
+            cv2.putText(original_frame_display, 
                         f"Score: {pred_score:.4f}", 
                         (10, 30), # Posição do texto
                         cv2.FONT_HERSHEY_SIMPLEX, 
@@ -384,13 +387,13 @@ def live_inference_opencv(model, image_size):
 
             # Concatena as imagens horizontalmente para exibir lado a lado
             # Certifique-se de que ambas as imagens tenham a mesma altura antes de concatenar
-            # if anomaly_map_colored.shape[0] != original_img.shape[0]:
+            # if anomaly_map_colored.shape[0] != original_frame_display.shape[0]:
             #     # Isso não deve acontecer se redimensionamos corretamente, mas é uma verificação de segurança
-            #     min_height = min(anomaly_map_colored.shape[0], original_img.shape[0])
-            #     original_img = cv2.resize(original_img, (original_img.shape[1], min_height))
+            #     min_height = min(anomaly_map_colored.shape[0], original_frame_display.shape[0])
+            #     original_frame_display = cv2.resize(original_frame_display, (original_frame_display.shape[1], min_height))
             #     anomaly_map_colored = cv2.resize(anomaly_map_colored, (anomaly_map_colored.shape[1], min_height))
 
-            combined_frame = np.hstack((original_img, anomaly_map_colored))
+            combined_frame = np.hstack((original_frame_display, anomaly_map_colored))
 
             # 4. Visualização
             cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
@@ -456,6 +459,9 @@ def live_inference_rasp(model, image_size,use_websoket):
             # Captura um frame da câmera como um array
             frame = picam2.capture_array()
 
+            # Clona o frame original para exibir ao lado do mapa de anomalia
+            original_frame_display = frame.copy() 
+
             # Converter o frame OpenCV (BGR) para PIL RGB para o modelo
             frame_rgb_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
@@ -498,7 +504,7 @@ def live_inference_rasp(model, image_size,use_websoket):
                 time.sleep(0.1)
             else:
                 # Adiciona o score na imagem original para display
-                cv2.putText(original_img, 
+                cv2.putText(original_frame_display, 
                             f"Score: {pred_score:.4f}", 
                             (10, 30), # Posição do texto
                             cv2.FONT_HERSHEY_SIMPLEX, 
@@ -506,7 +512,7 @@ def live_inference_rasp(model, image_size,use_websoket):
                             (0, 255, 0), # Cor verde (BGR)
                             2)        # Espessura da linha
 
-                combined_frame = np.hstack((original_img, anomaly_map_colored))
+                combined_frame = np.hstack((original_frame_display, anomaly_map_colored))
 
                 # 4. Visualização
                 cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
@@ -522,7 +528,10 @@ def live_inference_rasp(model, image_size,use_websoket):
         print(f"{Colors.RED}Ocorreu um erro durante o envio ou inferência: {e}{Colors.RESET}")
     finally:
         picam2.stop()
-        sock.close()
+        if use_websoket:
+            sock.close()
+        if hasattr(cv2, "destroyAllWindows") and os.environ.get("DISPLAY"):
+            cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
 # Abordagem é a mais simples.
