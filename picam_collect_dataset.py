@@ -1,11 +1,12 @@
 import cv2
 import time
 import os
-import random
 import shutil
 from pathlib import Path
 from functions import Colors
-
+import threading
+import queue
+from net_func import sender_thread_func
 
 try:
     from picamera2 import Picamera2
@@ -33,8 +34,8 @@ try:
         frame = camera.capture_array()
         # Converte a imagem de RGB para BGR para ser compatível com o OpenCV
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        return frame_bgr
-    
+        return frame_bgr  
+
 except ImportError:
     # --- Bloco executado se as bibliotecas da Raspberry Pi não existirem ---
     print("Usando a câmera do PC com OpenCV.")
@@ -50,6 +51,11 @@ except ImportError:
             return None
         frame=cv2.resize(frame, (image_size, image_size))
         return frame
+
+# Configurações para o envio
+PC_IP = "192.168.15.3" # Mude para o IP do seu PC
+PC_PORT = 5006
+IMAGE_QUEUE = queue.Queue(maxsize=5) # Fila com limite de 10 imagens
 
 def has_gui():
     """Verifica se há uma interface gráfica disponível."""
@@ -98,7 +104,13 @@ def collect_and_split_dataset(
     test_abnormal_path.mkdir(parents=True, exist_ok=True)
 
     is_headless = not has_gui()
-    
+
+    # --- INÍCIO DA LÓGICA DE THREADS E FILAS ---
+    stop_event = threading.Event()
+    sender_thread = threading.Thread(target=sender_thread_func, args=(stop_event, IMAGE_QUEUE, PC_IP, PC_PORT), daemon=True)
+    sender_thread.start()
+    # --- FIM DA LÓGICA DE THREADS E FILAS ---
+
     if is_headless:
         print(f"\n{Colors.CYAN}--- Modo de Coleta Headless (Sem GUI) ---{Colors.RESET}")
         print(f"{Colors.YELLOW}Não foi detectada uma interface gráfica. A coleta será totalmente automática.{Colors.RESET}")
@@ -138,6 +150,10 @@ def collect_and_split_dataset(
                 print("Erro: Não foi possível ler o frame.")
                 break
 
+            # A thread de envio pegará a imagem da fila em segundo plano
+            if not IMAGE_QUEUE.full():
+                IMAGE_QUEUE.put(frame_bgr)
+
             current_time = time.time()
 
             # Lógica para captura automática de imagens
@@ -173,11 +189,14 @@ def collect_and_split_dataset(
             # Parar se o total de frames automáticos for atingido
             if saved_auto_count >= total_frames_to_collect:
                 print(f"{Colors.YELLOW}Total de frames automáticos atingido ({total_frames_to_collect}). Pressione 's' para salvar manualmente ou 'q' para finalizar.{Colors.RESET}")
+                saving = False
                 # Uma vez que o limite automático é atingido, resetamos a condição para que ele não tente mais salvar automaticamente
                 total_frames_to_collect = -1 # Garante que a condição 'saved_auto_count < total_frames_to_collect' seja falsa
                 break
     finally:
-        # AQUI está a lógica para parar a câmera corretamente
+        # --- DESLIGAMENTO SEGURO DA THREAD ---
+        stop_event.set()
+        sender_thread.join()
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()

@@ -57,7 +57,7 @@ MODEL_CONFIGS = {
         "class": Dfkde,
         "params": {
             "backbone": "resnet18",
-            "layers": ("layer4",),
+            "layers": ("layer3",),
             "n_pca_components": 16,
             "pre_trained": True
         },
@@ -531,8 +531,7 @@ def live_inference_rasp(model, image_size,config):
 
                 # 4. Visualização
                 cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
-                cv2.imshow("1", frame)
-                cv2.imshow("2", original_frame_display)
+
                 # Salva no disco para comparar
                 cv2.imwrite("bgr_frame.jpg", frame)  # sem conversão
                 cv2.imwrite("rgb_frame.jpg", cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))  # convertido
@@ -585,3 +584,19 @@ def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 1
     """
     anomaly_pixels = np.sum(pred_mask > threshold)
     return anomaly_pixels > min_area_threshold
+
+def get_latest_checkpoint(results_path: Path) -> Path:
+    """Função auxiliar para encontrar o último checkpoint salvo."""
+    if not results_path.exists(): return None
+    
+    version_dirs = sorted([d for d in results_path.iterdir() if d.is_dir() and d.name.startswith("v")])
+    if not version_dirs: return None
+    
+    latest_version = version_dirs[-1]
+    checkpoint_path = latest_version / "weights" / "lightning"
+    
+    if checkpoint_path.exists():
+        ckpt_files = list(checkpoint_path.glob("*.ckpt"))
+        if ckpt_files:
+            return sorted(ckpt_files)[-1]
+    return None
