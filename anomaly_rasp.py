@@ -15,11 +15,11 @@ config = {
 
     # Recebimento do modelo pela rasp
     "receive_model_port" : 5008,
-    "receive_model" : False,
+    "receive_model" : True,
     "model_output_dir" : "models/received",
 
     # Collecting images configs
-    "collect" : False,
+    "collect" : True,
     "time_sample" : 0.2,
     "img_n" : 100,
 
@@ -39,9 +39,9 @@ config = {
     "export_type": "onnx",
 
     # 
-    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
     "live" : True,
-    "rasp" : False,
+    "rasp" : True,
     "websocket" : True,
     "udp_ip" : "192.168.15.5"
 }
@@ -79,7 +79,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            live_inference_rasp(model, config["image_size"],config["websocket"])
+            live_inference_rasp(model, config)
     else:
         #normal_dir = dataset_root / "test" / "normal"
         normal_dir = Path(config["normal_dir"])
