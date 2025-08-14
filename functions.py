@@ -420,6 +420,7 @@ def live_inference_rasp(model, image_size,use_websoket):
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
     from picamera2 import Picamera2
+    import os
 
     # 1. Configuração da Câmera
     picam2 = Picamera2() # Cria uma instância do controle da câmera
