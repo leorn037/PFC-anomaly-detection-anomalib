@@ -109,6 +109,7 @@ def collect_and_split_dataset(
         print(f"{Colors.BLUE}Imagens temporárias serão salvas em: {raw_path.resolve()}{Colors.RESET}")
         print(f"{Colors.GREEN}{Colors.BOLD}Instruções durante a coleta:{Colors.RESET}")
         print(f"  - O script salvará frames automaticamente a cada {time_sample}s.")
+        print(f"  - Pressione '{Colors.CYAN}c{Colors.RESET}' começar a salvar {Colors.BOLD}AUTOMATICAMENTE{Colors.RESET}.")
         print(f"  - Pressione '{Colors.CYAN}s{Colors.RESET}' para salvar um frame {Colors.BOLD}MANUALMENTE{Colors.RESET}.")
         print(f"  - Pressione '{Colors.CYAN}q{Colors.RESET}' para {Colors.BOLD}parar a coleta.{Colors.RESET}")
         print(f"{Colors.YELLOW}Coletará até {total_frames_to_collect} frames automaticamente.{Colors.RESET}")
