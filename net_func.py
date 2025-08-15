@@ -13,30 +13,35 @@ def sender_thread_func(stop_event, image_queue, pc_ip, pc_port):
     """Função que será executada em uma thread para enviar imagens."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Conectando ao PC em {pc_ip}:{pc_port}...")
-            sock.connect((pc_ip, pc_port))
-            print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Conexão estabelecida.")
-            
-            while not stop_event.is_set():
-                try:
-                    # Tenta pegar uma imagem da fila com um timeout
-                    frame = image_queue.get(timeout=0.1)
+            sock.settimeout(120.0)
+            try:
+                print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Conectando ao PC em {pc_ip}:{pc_port}...")
+                sock.connect((pc_ip, pc_port))
+                print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Conexão estabelecida.")
+                
+                while not stop_event.is_set():
+                    try:
+                        # Tenta pegar uma imagem da fila com um timeout
+                        frame = image_queue.get(timeout=0.1)
 
-                    # Codifica o frame em formato JPEG para compressão
-                    _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                        # Codifica o frame em formato JPEG para compressão
+                        _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
 
-                    # Serializa os dados e calcula o tamanho
-                    data = pickle.dumps(encoded_image)
-                    message_size = struct.pack("!I", len(data))
+                        # Serializa os dados e calcula o tamanho
+                        data = pickle.dumps(encoded_image)
+                        message_size = struct.pack("!I", len(data))
 
-                    # Envia o tamanho da mensagem e os dados
-                    sock.sendall(message_size + data)
-                    print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Imagem enviada. Tamanho: {len(data)} bytes.")
-                except queue.Empty: # Se a fila estiver vazia, apenas continua o loop e verifica o stop_event
-                    continue
-                except (ConnectionError, BrokenPipeError) as e:
-                    print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro de conexão: {e}. Encerrando thread...")
-                    break
+                        # Envia o tamanho da mensagem e os dados
+                        sock.sendall(message_size + data)
+                        print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Imagem enviada. Tamanho: {len(data)} bytes.")
+                    except queue.Empty: # Se a fila estiver vazia, apenas continua o loop e verifica o stop_event
+                        continue
+                    except (ConnectionError, BrokenPipeError) as e:
+                        print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro de conexão: {e}. Encerrando thread...")
+                        break
+            except (socket.timeout, ConnectionRefusedError):
+                print(f"{Colors.RED}Não foi possível conectar ao cliente, enviando imagens desativado.{Colors.RESET}")
+                return
     except ConnectionRefusedError:
         print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro: O PC recusou a conexão. Verifique se o servidor está rodando.")
     except Exception as e:

@@ -2,7 +2,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import time
 init_time = time.time()
-from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs
+from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs, anomaly_args
 from net_func import receive_all_images_and_save, send_model_to_pi
 from collect_dataset import setup_camera
 
@@ -46,6 +46,7 @@ config = {
 
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
+    anomaly_args(config,"pc")
     # --- Passo 1: Receber todas as imagens da Raspberry Pi ---
     
     receive_path = Path(config["normal_dir"])

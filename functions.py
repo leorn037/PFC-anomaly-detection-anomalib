@@ -150,7 +150,7 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
         test_split_mode=TestSplitMode.SYNTHETIC, # The Folder datamodule will create training, validation, test and prediction datasets and dataloaders for us.
         #abnormal_dir=config["abnormal_test_dir"], # Imagens anômalas para teste
         #normal_test_dir=config["normal_test_dir"], # Imagens normais para teste
-        num_workers=0,
+        num_workers=4,
         train_batch_size=config["batch_size"],
         augmentations=transform
     )
@@ -481,7 +481,7 @@ def live_inference_rasp(model, config, camera):
 
             start_time=time.time()
             original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
-            print(f"Tempo: {time.time()-start_time:.2f}")
+            print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.9)} / Area: {check_for_anomaly_by_area(pred_mask, 100, 0.9)}")
             
 
             # Pós-processamento para visualização com OpenCV:
@@ -599,3 +599,50 @@ def get_latest_checkpoint(results_path: Path) -> Path:
         if ckpt_files:
             return sorted(ckpt_files)[-1]
     return None
+
+import argparse
+
+def anomaly_args(config, mode="rasp"):
+    """
+    Cria argumentos de linha de comando para sobrescrever valores de config.
+
+    Args:
+        config (dict): Dicionário de configuração padrão.
+        mode (str): "pc" ou "rasp" para decidir quais argumentos expor.
+    """
+    
+    # Cria um objeto ArgumentParser
+    parser = argparse.ArgumentParser(
+        description="Script para detecção de anomalias")
+
+    pc_args = [
+        ("pi_ip", str, "IP da Raspberry Pi"),
+        ("model_name", str, "Nome do modelo para ser treinado")
+    ]
+
+    rasp_args = [
+        ("pc_ip", str, "IP do PC para receber dados"),
+        ("collect", bool, "Habilita a coleta de imagens (True/False)"),
+        ("time_sample", float, "Intervalo entre capturas automáticas de imagens"),
+        ("img_n", int, "Número de imagens a ser capturadas"),
+        ("receive_model", bool, "Habilita a recepção do modelo via rede (True/False)"),
+    ]
+
+    # Adiciona argumentos específicos de cada modo
+    specific_args = pc_args if mode == "pc" else rasp_args
+    for key, arg_type, help_text in specific_args:
+        parser.add_argument(
+            f"-{key[0]}",
+            f"--{key}", 
+            type=arg_type, 
+            default=config[key], 
+            # choices=['baixa', 'normal', 'alta'],
+            help=help_text)
+
+    args = parser.parse_args()
+
+    # Atualiza o config com valores passados no CLI
+    for key in vars(args):
+        config[key] = getattr(args, key)
+
+    return config

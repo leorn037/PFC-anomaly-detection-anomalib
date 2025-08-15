@@ -63,8 +63,8 @@ def collect_and_split_dataset(
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
     image_size: int = 256,
-    pc_ip = "192.168.15.3",
-    pc_port = 5007,
+    pc_ip = None,
+    pc_port = None,
     ):
     """
     Coleta imagens de uma câmera, as salva temporariamente e as divide
@@ -107,9 +107,10 @@ def collect_and_split_dataset(
     is_headless = not has_gui()
 
     # --- INÍCIO DA LÓGICA DE THREADS E FILAS ---
-    stop_event = threading.Event()
-    sender_thread = threading.Thread(target=sender_thread_func, args=(stop_event, IMAGE_QUEUE, pc_ip, pc_port), daemon=True)
-    sender_thread.start()
+    if pc_ip and pc_port:
+        stop_event = threading.Event()
+        sender_thread = threading.Thread(target=sender_thread_func, args=(stop_event, IMAGE_QUEUE, pc_ip, pc_port), daemon=True)
+        sender_thread.start()
     # --- FIM DA LÓGICA DE THREADS E FILAS ---
 
     if is_headless:
@@ -142,8 +143,6 @@ def collect_and_split_dataset(
             if frame_bgr is None:
                 print("Erro: Não foi possível ler o frame.")
                 break
-
-
 
             current_time = time.time()
 
@@ -190,7 +189,8 @@ def collect_and_split_dataset(
     finally:
         # --- DESLIGAMENTO SEGURO DA THREAD ---
         stop_event.set()
-        sender_thread.join()
+        if pc_ip and pc_port:
+            sender_thread.join(timeout=1)  # Espera no máximo 1 segundo
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()
@@ -228,5 +228,6 @@ if __name__ == "__main__":
         capture_dir="temp_images", # Pasta para salvar as imagens brutas da câmera
         time_sample=0.1,                       # Salvar um frame normal automaticamente a cada 0.5 segundos
         total_frames_to_collect=100,             # Parar a coleta automática de normais após 200 frames
-        image_size=256
+        image_size=256,
+        camera = setup_camera(image_size)
     )
