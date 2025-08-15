@@ -141,23 +141,6 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
     except Exception as e:
         print(f"{Colors.RED}Erro ao enviar o modelo: {e}{Colors.RESET}")
 
-def get_latest_checkpoint(results_path: Path) -> Path:
-    """Função auxiliar para encontrar o último checkpoint salvo."""
-    if not results_path.exists(): return None
-    
-    version_dirs = sorted([d for d in results_path.iterdir() if d.is_dir() and d.name.startswith("v")])
-    if not version_dirs: return None
-    
-    latest_version = version_dirs[-1]
-    checkpoint_path = latest_version / "weights" / "lightning"
-    
-    if checkpoint_path.exists():
-        ckpt_files = list(checkpoint_path.glob("*.ckpt"))
-        if ckpt_files:
-            return sorted(ckpt_files)[-1]
-    return None
-
-
 def receive_model_from_pc(server_port: int, output_dir: str):
     """
     Escuta por um pacote de modelo e configurações, salva o modelo
@@ -193,7 +176,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
             # 2. Recebe o pacote completo com barra de progresso
             data = b''
             bytes_received = 0
-            print(f"{Colors.BLUE}Recebendo dados: 0.00% [0 / {message_size} bytes]{Colors.RESET}", end="\r")
+            print(f"{Colors.BLUE}Recebendo dados: 0.00% [0 / {message_size} bytes]{Colors.RESET}", end="\n")
             
             while bytes_received < message_size:
                 chunk = conn.recv(message_size - len(data))

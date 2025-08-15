@@ -495,7 +495,7 @@ def live_inference_rasp(model, config, camera):
             # Aplica um mapa de cores (heatmap) para melhor visualização
             anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
                         
-            if config["websoket"]:
+            if config["websocket"]:
                 # Prepara os dados para envio: frame original, mapa colorido e score
                 # Usaremos o frame original (BGR) do OpenCV e o mapa de anomalia colorido
                 _, original_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70]) # Qualidade 70 (0-100)
