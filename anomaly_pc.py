@@ -10,8 +10,8 @@ config = {
     # Rede
     "receive_port": 5007,      # Porta para receber imagens
     "pi_port": 5008,           # Porta para enviar o modelo
-    "pi_ip": "192.168.15.7",   # IP da Raspberry Pi
-    "pc_ip": "192.168.15.3",   # IP do PC
+    "pi_ip": "raspberrypi",   # IP da Raspberry Pi
+    "pc_ip": "leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
     "collect" : True,
@@ -32,7 +32,7 @@ config = {
     "normal_test_dir": "data/test/normal", # Imagens normais para teste
 
     # Model configs
-    "model_name": 'Padim',
+    "model_name": 'PatchCore',
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",

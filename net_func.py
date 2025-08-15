@@ -7,6 +7,7 @@ import numpy as np
 from pathlib import Path
 from functions import Colors
 import queue
+from time import time
 
 def sender_thread_func(stop_event, image_queue, pc_ip, pc_port):
     """Função que será executada em uma thread para enviar imagens."""
@@ -173,11 +174,13 @@ def receive_model_from_pc(server_port: int, output_dir: str):
         server_sock.bind(('0.0.0.0', server_port))
         server_sock.listen(1)
         
+        start_time = time()
         print(f"{Colors.BLUE}Aguardando o modelo do PC na porta {server_port}...{Colors.RESET}")
         conn, addr = server_sock.accept()
         
         with conn:
-            print(f"{Colors.GREEN}Conexão aceita de {addr}. Recebendo modelo...{Colors.RESET}")
+            training_time = time()
+            print(f"{Colors.GREEN}Conexão aceita de {addr} após {training_time - start_time} segundos. Recebendo modelo...{Colors.RESET}")
             
             # 1. Recebe o tamanho do cabeçalho
             header_size_data = conn.recv(4)
@@ -210,18 +213,26 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                     f.write(chunk)
                     bytes_received += len(chunk)
 
-                # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
-                if bytes_received % 102400 == 0 or bytes_received == file_size:
-                    progress = (bytes_received / file_size) * 100
-                    print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
-            
+
+                    # Exibe o progresso apenas quando a porcentagem muda
+                    #progress_percent = int((bytes_received_total / file_size) * 100)
+                    #if progress_percent > last_progress_percent:
+                    #    print(f"{Colors.BLUE}Recebendo: {progress_percent}% [{bytes_received_total/1000:.1f} KB / {file_size/1000:.1f} KB]{Colors.RESET}", end="\r")
+                    #    last_progress_percent = progress_percent
+
+                    # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
+                    if bytes_received % 102400 == 0 or bytes_received == file_size:
+                        progress = (bytes_received / file_size) * 100
+                        print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
+                
             if bytes_received == file_size:
                 print(f"{Colors.GREEN}Arquivo '{model_name}.ckpt' recebido com sucesso!{Colors.RESET}")
             else:
                 print(f"{Colors.YELLOW}Aviso: Conexão encerrada prematuramente. Arquivo pode estar incompleto.{Colors.RESET}")
                 return None
             
-            print(f"{Colors.GREEN}Modelo e configurações recebidos com sucesso!{Colors.RESET}")
+            receive_time = time() - training_time
+            print(f"{Colors.GREEN}Modelo e configurações recebidos com sucesso após {receive_time:.2f} segundos!{Colors.RESET}")
             
             # Retorna as configurações para o script principal
             return {

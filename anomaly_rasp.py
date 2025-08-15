@@ -10,8 +10,8 @@ config = {
     # Rede
     "receive_port": 5007,      # Porta para receber imagens
     "pi_port": 5008,           # Porta para enviar o modelo
-    "pi_ip": "192.168.15.7",   # IP da Raspberry Pi
-    "pc_ip": "192.168.15.3",   # IP do PC
+    "pi_ip": "raspberrypi",   # IP da Raspberry Pi
+    "pc_ip": "DESKTOP-CK3CNOB", #"leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
     "collect" : True,
@@ -36,7 +36,7 @@ config = {
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",
-    
+
     "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
 
     # Visualização
@@ -70,7 +70,7 @@ def main():
         MODEL_CONFIGS[model_name]['params'] = dict['model_params']
         MODEL_CONFIGS[model_name]['inference_params'] = dict['model_inference_params']
         config['ckpt_path'] = dict['ckpt_path']
-        print(f"{Colors.CYAN}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
+        print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
 
 
     # 2. Crie o modelo
