@@ -4,6 +4,7 @@ import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs
 from net_func import receive_all_images_and_save, send_model_to_pi
+from picam_collect_dataset import setup_camera
 
 config = {
     # Recebimento de imagens no pc
@@ -49,8 +50,8 @@ config = {
 
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
-
     # --- Passo 1: Receber todas as imagens da Raspberry Pi ---
+    
     receive_path = Path(config["normal_dir"])
     receive_all_images_and_save(config["num_images_to_receive"], receive_path, config["receive_port"])
     print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")

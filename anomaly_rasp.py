@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, create_model, live_inference_rasp, visualize_imgs
-from picam_collect_dataset import collect_and_split_dataset
+from picam_collect_dataset import collect_and_split_dataset, setup_camera
 from net_func import receive_model_from_pc
 
 config = {
@@ -52,8 +52,10 @@ config = {
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     # 1. Prepare dataset:
+    camera = setup_camera(config["image_size"])
     if config["collect"]: # Novo dataset
         collect_and_split_dataset(
+            camera,
             output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
             capture_dir=config["normal_dir"], # Pasta para salvar as imagens brutas da câmera
             time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
@@ -82,7 +84,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            live_inference_rasp(model, config)
+            live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"
         normal_dir = Path(config["normal_dir"])

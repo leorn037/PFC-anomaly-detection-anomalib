@@ -57,6 +57,7 @@ def has_gui():
     return 'DISPLAY' in os.environ and not os.environ['DISPLAY'] == ''
 
 def collect_and_split_dataset(
+    camera,
     output_base_dir: str = "data",
     capture_dir: str = "temp_images", # Para imagens normais automáticas
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
@@ -64,8 +65,7 @@ def collect_and_split_dataset(
     image_size: int = 256,
     pc_ip = "192.168.15.3",
     pc_port = 5007,
-
-):
+    ):
     """
     Coleta imagens de uma câmera, as salva temporariamente e as divide
     em diretórios de treino/teste para o Anomalib. Permite também salvar
@@ -126,14 +126,6 @@ def collect_and_split_dataset(
         print(f"  - Pressione '{Colors.CYAN}s{Colors.RESET}' para salvar um frame {Colors.BOLD}MANUALMENTE{Colors.RESET}.")
         print(f"  - Pressione '{Colors.CYAN}q{Colors.RESET}' para {Colors.BOLD}parar a coleta.{Colors.RESET}")
         print(f"{Colors.YELLOW}Coletará até {total_frames_to_collect} frames automaticamente.{Colors.RESET}")
-
-
-    # --- Configuração da Câmera com picamera2 ---
-    camera = setup_camera(image_size)
-    if camera is None:
-        print(f"{Colors.RED}Erro: Não foi possível iniciar a câmera da Raspberry Pi. Detalhes: {e}{Colors.RESET}")
-        print(f"{Colors.RED}Verifique a conexão da câmera e se a biblioteca picamera2 está instalada.{Colors.RESET}")
-        return
 
 
     init_time = time.time()

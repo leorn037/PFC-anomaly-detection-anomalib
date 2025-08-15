@@ -424,7 +424,7 @@ def live_inference_opencv(model, image_size):
         cap.release() # Libera a câmera
         cv2.destroyAllWindows() # Fecha todas as janelas do OpenCV
 
-def live_inference_rasp(model, config):
+def live_inference_rasp(model, config, camera):
     """
     Realiza inferência em tempo real usando a Raspberry.
 
@@ -433,11 +433,10 @@ def live_inference_rasp(model, config):
         image_size (int): O tamanho para redimensionar a imagem de entrada do modelo.
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
-    from picamera2 import Picamera2
     import os
 
     # 1. Configuração da Câmera
-    picam2 = Picamera2() # Cria uma instância do controle da câmera
+    picam2 = camera # Cria uma instância do controle da câmera
     image_size = config["image_size"]
     # Configuração de pré-visualização com resolução de 640x480 pixels
     config2 = picam2.create_preview_configuration(main={"size": (image_size, image_size), "format": "BGR888"})

@@ -204,7 +204,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
                 if bytes_received % 102400 == 0 or bytes_received == message_size:
                     progress = (bytes_received / message_size) * 100
-                    print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received} / {message_size} bytes]{Colors.RESET}", end="\r")
+                    print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received//1000} / {message_size//1000} KB]{Colors.RESET}", end="\r")
             
             if bytes_received < message_size:
                 print(f"{Colors.YELLOW}Aviso: Conexão encerrada prematuramente. Pacote pode estar incompleto.{Colors.RESET}")
