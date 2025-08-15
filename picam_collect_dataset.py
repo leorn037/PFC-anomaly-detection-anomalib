@@ -151,14 +151,15 @@ def collect_and_split_dataset(
                 print("Erro: Não foi possível ler o frame.")
                 break
 
-            # A thread de envio pegará a imagem da fila em segundo plano
-            if not IMAGE_QUEUE.full():
-                IMAGE_QUEUE.put(frame_bgr)
+
 
             current_time = time.time()
 
             # Lógica para captura automática de imagens
             if saving and saved_auto_count < total_frames_to_collect and (current_time - last_capture_auto >= time_sample):
+                # A thread de envio pegará a imagem da fila em segundo plano
+                if not IMAGE_QUEUE.full():
+                    IMAGE_QUEUE.put(frame_bgr)
                 timestamp = int(time.time() * 1000)
                 filename = os.path.join(raw_path, f"auto_img_{saved_auto_count:04d}_{timestamp}.jpg")
                 cv2.imwrite(filename, frame_bgr)

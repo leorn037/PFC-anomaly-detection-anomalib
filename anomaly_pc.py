@@ -10,7 +10,7 @@ config = {
     "num_images_to_receive": 100,  # Adicione o número de imagens a receber
     "receive_port": 5007,          # Porta para receber imagens
     "pi_port": 5008,       # Porta para enviar o modelo
-    "pi_ip": "192.168.15.5",       # IP da Raspberry Pi
+    "pi_ip": "192.168.15.7",       # IP da Raspberry Pi
     "pc_ip": "192.168.15.3",
 
     # Recebimento do modelo pela rasp
@@ -40,7 +40,7 @@ config = {
     "export_type": "onnx",
 
     # 
-    "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
+    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
     "live" : True,
     "rasp" : True,
     "websocket" : True,
