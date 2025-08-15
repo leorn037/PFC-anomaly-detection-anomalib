@@ -7,23 +7,20 @@ from net_func import receive_all_images_and_save, send_model_to_pi
 from picam_collect_dataset import setup_camera
 
 config = {
-    # Recebimento de imagens no pc
-    "num_images_to_receive": 100,  # Adicione o número de imagens a receber
-    "receive_port": 5007,          # Porta para receber imagens
-    "pi_port": 5008,       # Porta para enviar o modelo
-    "pi_ip": "192.168.15.7",       # IP da Raspberry Pi
-    "pc_ip": "192.168.15.3",
+    # Rede
+    "receive_port": 5007,      # Porta para receber imagens
+    "pi_port": 5008,           # Porta para enviar o modelo
+    "pi_ip": "192.168.15.7",   # IP da Raspberry Pi
+    "pc_ip": "192.168.15.3",   # IP do PC
 
-    # Recebimento do modelo pela rasp
-    "receive_model_port" : 5008,
-    "receive_model" : True,
-    "model_output_dir" : "models/received",
-    "file_name" : "model_test.ckpt",
-
-    # Collecting images configs
+    # Coleta de Imagens
     "collect" : True,
     "time_sample" : 0.2,
     "img_n" : 100,
+
+    # Recebimento do modelo pela rasp
+    "receive_model" : True,
+    "model_output_dir" : "models/received",
 
     # Dataset configs
     "dataset_root": '.',
@@ -35,17 +32,16 @@ config = {
     "normal_test_dir": "data/test/normal", # Imagens normais para teste
 
     # Model configs
-    "model_name": 'DFM',
+    "model_name": 'DFKDE',
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",
+    
+    "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
 
-    # 
-    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    # Visualização
     "live" : True,
-    "rasp" : True,
     "websocket" : True,
-    "udp_ip" : "192.168.15.5"
 }
 
 def main():
@@ -53,8 +49,9 @@ def main():
     # --- Passo 1: Receber todas as imagens da Raspberry Pi ---
     
     receive_path = Path(config["normal_dir"])
-    receive_all_images_and_save(config["num_images_to_receive"], receive_path, config["receive_port"])
-    print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
+    if config["collect"]:
+        receive_all_images_and_save(config["img_n"], receive_path, config["receive_port"])
+        print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
 
     # --- Passo 2: Executar o treinamento com as imagens recebidas ---
     dataset_root = Path(config["dataset_root"])

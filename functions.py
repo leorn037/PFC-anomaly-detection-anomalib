@@ -458,7 +458,7 @@ def live_inference_rasp(model, config, camera):
     
     if config["websocket"]:
         # --- Configurações UDP ---
-        UDP_IP = config["udp_ip"] # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
+        UDP_IP = config["pc_ip"] # IP do SEU PC (cliente)! A Raspberry Pi vai enviar para este IP.
         UDP_PORT = 5005        # Porta para onde a Pi vai ENVIAR os dados.
         # Nota: O IP do servidor da Pi é '0.0.0.0' para escutar, mas o cliente precisa do IP real da Pi.
         # Aqui, a Pi é o REMETENTE UDP, então precisa do IP do DESTINATÁRIO (seu PC).
