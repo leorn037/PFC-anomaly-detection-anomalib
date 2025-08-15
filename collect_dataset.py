@@ -188,8 +188,8 @@ def collect_and_split_dataset(
                 break
     finally:
         # --- DESLIGAMENTO SEGURO DA THREAD ---
-        stop_event.set()
         if pc_ip and pc_port:
+            stop_event.set()
             sender_thread.join(timeout=1)  # Espera no máximo 1 segundo
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()

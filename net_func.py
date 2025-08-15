@@ -241,3 +241,70 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 "model_inference_params": model_inference_params,
                 "ckpt_path": str(file_path)
             }
+
+def live_inference_rasp_to_pc(picam2, config, timeout: int = 1):
+    """
+    Captura frames, envia para um PC para inferência e recebe o resultado.
+
+    Args:
+        picam2 (Picamera2): Instância da câmera já configurada e iniciada.
+        pc_ip (str): Endereço IP do PC.
+        pc_port (int): A porta TCP do servidor no PC.
+        image_size (int): Tamanho da imagem para captura.
+        timeout (int): Tempo máximo em segundos para esperar pela resposta do PC.
+    """
+    pc_ip = config["pc_ip"]
+    pc_port = config["receive_port"]
+    print(f"{Colors.GREEN}Conectando ao servidor no PC ({pc_ip}:{pc_port})...{Colors.RESET}")
+    
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout) # Define um timeout para as operações de socket
+            sock.connect((pc_ip, pc_port))
+            print(f"{Colors.GREEN}Conexão estabelecida com sucesso. Pressione 'Ctrl+C' para sair.{Colors.RESET}")
+            
+            while True:
+                # 1. Captura o frame da câmera
+                frame = picam2.capture_array()
+                
+                # 2. Codifica e serializa o frame
+                _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                data = pickle.dumps(encoded_image)
+                message_size = struct.pack("!I", len(data))
+                
+                start_time = time.time()
+                
+                # 3. Envia o tamanho da mensagem e os dados
+                sock.sendall(message_size + data)
+                
+                # 4. Espera a resposta do PC
+                try:
+                    response_flag_bytes = sock.recv(1)
+                    if not response_flag_bytes:
+                        print(f"{Colors.YELLOW}Conexão encerrada pelo PC.{Colors.RESET}")
+                        break
+                        
+                    is_anomaly = response_flag_bytes == b'\x01'
+                    end_time = time.time()
+                    
+                    status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
+                    
+                    print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
+                
+                except socket.timeout:
+                    print(f"{Colors.YELLOW}Tempo limite de {timeout}s excedido. O PC não respondeu.{Colors.RESET}")
+                    continue
+                
+                except Exception as e:
+                    print(f"{Colors.RED}Erro durante a comunicação: {e}. Encerrando...{Colors.RESET}")
+                    break
+    
+    except ConnectionRefusedError:
+        print(f"{Colors.RED}Erro: Conexão recusada. O servidor no PC não está online ou a porta está incorreta.{Colors.RESET}")
+    except socket.timeout:
+        print(f"{Colors.RED}Erro: Tempo limite excedido ao tentar conectar ao PC.{Colors.RESET}")
+    except KeyboardInterrupt:
+        print(f"{Colors.YELLOW}Ctrl+C detectado. Encerrando...{Colors.RESET}")
+    finally:
+        picam2.stop()
+        print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")

@@ -2,8 +2,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import time
 init_time = time.time()
-from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs, anomaly_args
-from net_func import receive_all_images_and_save, send_model_to_pi
+from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs, anomaly_args, serve_inference_to_pi
+from net_func import receive_all_images_and_save, send_model_to_pi 
 from collect_dataset import setup_camera
 
 config = {
@@ -38,6 +38,7 @@ config = {
     "export_type": "onnx",
     
     "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "pc_inference" : True,
 
     # Visualização
     "live" : True,
@@ -88,7 +89,8 @@ def main():
     print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 
     if config["live"]:
-            live_inference_opencv(model, config["image_size"])
+            if config["pc_inference"]: serve_inference_to_pi(model, config)
+            else: live_inference_opencv(model, config["image_size"])
     else:
         #normal_dir = dataset_root / "test" / "normal"
         normal_dir = Path(config["normal_dir"])

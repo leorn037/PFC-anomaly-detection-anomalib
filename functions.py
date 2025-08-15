@@ -553,6 +553,78 @@ def live_inference_rasp(model, config, camera):
             cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
+def serve_inference_to_pi(model, pc_ip: str, pc_port: int, image_size: int):
+    """
+    Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
+
+    Args:
+        model (torch.nn.Module): O modelo Anomalib carregado para inferência.
+        pc_ip (str): IP do PC (geralmente '0.0.0.0' para escutar todas as interfaces).
+        pc_port (int): A porta TCP para escutar.
+        image_size (int): O tamanho da imagem para inferência.
+    """
+    import struct
+    # Pré-processamento: as mesmas transformações usadas no treinamento
+    transform_for_model = v2.Compose([
+        v2.Resize((image_size, image_size)),
+        v2.ToTensor(),
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    model.eval() # Coloca o modelo em modo de avaliação
+    
+    
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
+        server_sock.bind((pc_ip, pc_port))
+        server_sock.listen(1)
+        print(f"{Colors.GREEN}Servidor pronto. Aguardando conexão da Raspberry Pi em {pc_ip}:{pc_port}...{Colors.RESET}")
+        
+        conn, addr = server_sock.accept()
+        with conn:
+            print(f"{Colors.GREEN}Conexão aceita de {addr}. Iniciando inferência...{Colors.RESET}")
+            
+            # Loop principal de inferência
+            while True:
+                try:
+                    # 1. Recebe o tamanho da imagem
+                    image_size_data = conn.recv(4)
+                    if not image_size_data: break
+                    image_size = struct.unpack("!I", image_size_data)[0]
+                    
+                    # 2. Recebe a imagem completa
+                    image_data = b''
+                    while len(image_data) < image_size:
+                        packet = conn.recv(image_size - len(image_data))
+                        if not packet: break
+                        image_data += packet
+                    
+                    if not image_data: break
+                    
+                    # 3. Deserializa e decodifica a imagem
+                    encoded_image = pickle.loads(image_data)
+                    decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+
+                    # 4. Executa a inferência
+                    original_img_pil = Image.fromarray(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB))
+                    _, _, pred_score, _ = predict_image(model, original_img_pil, transform_for_model, image_size)
+                    
+                    # 5. Obtém a flag de anomalia
+                    is_anomaly = check_for_anomaly_by_score(pred_score, 0.5)
+
+                    # 6. Envia a flag de volta para a Raspberry Pi
+                    response_flag = b'\x01' if is_anomaly else b'\x00'
+                    conn.sendall(response_flag)
+                    
+                    print(f"Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
+
+                except ConnectionResetError:
+                    print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
+                    break # Sai do loop e espera uma nova conexão
+                except Exception as e:
+                    print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+                    break
+
+
 # Abordagem é a mais simples.
 # Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.
 def check_for_anomaly_by_score(pred_score: float, threshold: float = 0.5) -> bool:
