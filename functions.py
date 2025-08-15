@@ -689,7 +689,8 @@ def anomaly_args(config, mode="rasp"):
 
     pc_args = [
         ("pi_ip", str, "IP da Raspberry Pi"),
-        ("model_name", str, "Nome do modelo para ser treinado")
+        ("model_name", str, "Nome do modelo para ser treinado"),
+        ("on_pc_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
     ]
 
     rasp_args = [
@@ -698,6 +699,7 @@ def anomaly_args(config, mode="rasp"):
         ("time_sample", float, "Intervalo entre capturas automáticas de imagens"),
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("receive_model", bool, "Habilita a recepção do modelo via rede (True/False)"),
+        ("on_pc_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
     ]
 
     # Adiciona argumentos específicos de cada modo

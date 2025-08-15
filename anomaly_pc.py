@@ -38,7 +38,7 @@ config = {
     "export_type": "onnx",
     
     "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
-    "pc_inference" : True,
+    "on_pc_inference" : True,
 
     # Visualização
     "live" : True,
@@ -89,7 +89,7 @@ def main():
     print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 
     if config["live"]:
-            if config["pc_inference"]: serve_inference_to_pi(model, config)
+            if config["on_pc_inference"]: serve_inference_to_pi(model, config)
             else: live_inference_opencv(model, config["image_size"])
     else:
         #normal_dir = dataset_root / "test" / "normal"
