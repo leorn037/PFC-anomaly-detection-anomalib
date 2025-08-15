@@ -4,7 +4,7 @@ import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs
 from net_func import receive_all_images_and_save, send_model_to_pi
-from picam_collect_dataset import setup_camera
+from collect_dataset import setup_camera
 
 config = {
     # Rede
@@ -32,7 +32,7 @@ config = {
     "normal_test_dir": "data/test/normal", # Imagens normais para teste
 
     # Model configs
-    "model_name": 'PatchCore',
+    "model_name": 'DFM',
     "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",

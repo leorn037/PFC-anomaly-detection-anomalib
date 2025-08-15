@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, create_model, live_inference_rasp, visualize_imgs
-from picam_collect_dataset import collect_and_split_dataset, setup_camera
+from collect_dataset import collect_and_split_dataset, setup_camera
 from net_func import receive_model_from_pc
 
 config = {
