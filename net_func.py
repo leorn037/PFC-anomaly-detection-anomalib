@@ -93,8 +93,6 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
 
     Args:
         model_path (Path): O caminho para o arquivo do modelo.
-        pi_ip (str): O IP da Raspberry Pi.
-        pi_port (int): A porta TCP que a Pi está escutando.
         config (dict): O dicionário de configuração principal.
         model_configs (dict): O dicionário de configurações dos modelos.
     """
@@ -116,26 +114,41 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
         'model_inference_params': model_configs[model_name].get("inference_params", {}),
         'model_file': model_bytes,
     }
+
+
+    model_name = config["model_name"]
+    file_size = os.path.getsize(model_path)
     
-    # 3. Serializa o dicionário completo com pickle
-    serialized_payload = pickle.dumps(payload)
-    message_size = struct.pack("!I", len(serialized_payload))
+    # 1. Prepara o cabeçalho (configurações + info do arquivo)
+    header_payload = {
+        'model_name': model_name,
+        'model_params': model_configs[model_name]["params"],
+        'model_inference_params': model_configs[model_name].get("inference_params", {}),
+        'file_size': file_size
+    }
+        
+    serialized_header = pickle.dumps(header_payload)
+    header_size = struct.pack("!I", len(serialized_header))
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             print(f"{Colors.BLUE}Conectando à Raspberry Pi em {pi_ip}:{pi_port} para enviar o modelo...{Colors.RESET}")
             sock.connect((pi_ip, pi_port))
 
-            # Envia o tamanho total do pacote seguido do pacote de dados
-            sock.sendall(message_size + serialized_payload)
+            # 2. Envia o tamanho e o cabeçalho primeiro
+            sock.sendall(header_size + serialized_header)
             
+            # 3. Envia o arquivo em blocos diretamente do disco
+            print(f"Iniciando envio do arquivo '{model_name}.ckpt' ({file_size} bytes)...")
             with open(model_path, 'rb') as f:
                 while True:
-                    data = f.read(1024)
-                    if not data: break
-                    sock.sendall(data)
+                    bytes_read = f.read(4096) # Lê em blocos de 4KB
+                    if not bytes_read:
+                        break # Fim do arquivo
+                    sock.sendall(bytes_read)
+
+            print(f"{Colors.GREEN}Modelo enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
             
-            print(f"{Colors.GREEN}Modelo e configurações enviados com sucesso! Tamanho: {len(serialized_payload)} bytes.{Colors.RESET}")
     except ConnectionRefusedError:
         print(f"{Colors.RED}Erro: Raspberry Pi recusou a conexão. Verifique se o servidor de recepção está rodando.{Colors.RESET}")
     except Exception as e:
@@ -166,47 +179,47 @@ def receive_model_from_pc(server_port: int, output_dir: str):
         with conn:
             print(f"{Colors.GREEN}Conexão aceita de {addr}. Recebendo modelo...{Colors.RESET}")
             
-            # 1. Recebe o tamanho total do pacote
-            message_size_data = conn.recv(4)
-            if not message_size_data:
-                print(f"{Colors.RED}Erro: Conexão encerrada antes de receber o tamanho do pacote.{Colors.RESET}")
+            # 1. Recebe o tamanho do cabeçalho
+            header_size_data = conn.recv(4)
+            if not header_size_data:
+                print(f"{Colors.RED}Erro: Conexão encerrada antes de receber o cabeçalho.{Colors.RESET}")
                 return None
-            message_size = struct.unpack("!I", message_size_data)[0]
-            
-            # 2. Recebe o pacote completo com barra de progresso
-            data = b''
-            bytes_received = 0
-            print(f"{Colors.BLUE}Recebendo dados: 0.00% [0 / {message_size} KB]{Colors.RESET}", end="\r")
-            
-            while bytes_received < message_size:
-                chunk = conn.recv(message_size - len(data))
-                if not chunk: break
-                data += chunk
-                bytes_received += len(chunk)
+            header_size = struct.unpack("!I", header_size_data)[0]
 
-                # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
-                if bytes_received % 102400 == 0 or bytes_received == message_size:
-                    progress = (bytes_received / message_size) * 100
-                    print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received//1000} / {message_size//1000} KB]{Colors.RESET}", end="\r")
+                        # 2. Recebe o cabeçalho e o desserializa
+            header = conn.recv(header_size)
+            header_payload = pickle.loads(header)
             
-            if bytes_received < message_size:
-                print(f"{Colors.YELLOW}Aviso: Conexão encerrada prematuramente. Pacote pode estar incompleto.{Colors.RESET}")
-                return None
-            
-            # 3. Desserializa o pacote
-            payload = pickle.loads(data)
-            
-            # 4. Extrai os dados e salva o arquivo
-            model_name = payload['model_name']
-            model_params = payload['model_params']
-            model_inference_params = payload['model_inference_params']
-            model_file_bytes = payload['model_file']
+            # 4. Extrai os dados
+            model_name = header_payload['model_name']
+            model_params = header_payload['model_params']
+            model_inference_params = header_payload.get("model_inference_params")
+
+            # Extrai os dados do cabeçalho
+            file_size = header_payload['file_size']
             
             file_path = output_path / f"{model_name}.ckpt"
+            bytes_received = 0
 
-            # Recebe o arquivo e salva
+            # 3. Salva o arquivo em disco em blocos
+            print(f"{Colors.BLUE}Recebendo arquivo '{model_name}': 0.00% [0 / ({file_size//1024} KB]{Colors.RESET}", end="\r")
             with open(file_path, 'wb') as f:
-                f.write(model_file_bytes)
+                while bytes_received < file_size:
+                    chunk = conn.recv(4096) # Recebe dados em blocos
+                    if not chunk: break
+                    f.write(chunk)
+                    bytes_received += len(chunk)
+
+                # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
+                if bytes_received % 102400 == 0 or bytes_received == file_size:
+                    progress = (bytes_received / file_size) * 100
+                    print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
+            
+            if bytes_received == file_size:
+                print(f"{Colors.GREEN}Arquivo '{model_name}.ckpt' recebido com sucesso!{Colors.RESET}")
+            else:
+                print(f"{Colors.YELLOW}Aviso: Conexão encerrada prematuramente. Arquivo pode estar incompleto.{Colors.RESET}")
+                return None
             
             print(f"{Colors.GREEN}Modelo e configurações recebidos com sucesso!{Colors.RESET}")
             
