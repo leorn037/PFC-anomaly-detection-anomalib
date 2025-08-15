@@ -66,13 +66,16 @@ def main():
         )
 
     if config["receive_model"]:
+        start_time = time.time()
         dict = receive_model_from_pc(config["receive_model_port"], config["model_output_dir"])
-
+        receive_model_time = time.time() - start_time
+        
         config['model_name'] = model_name = dict['model_name']
         MODEL_CONFIGS[model_name]['params'] = dict['model_params']
         MODEL_CONFIGS[model_name]['inference_params'] = dict['model_inference_params']
         config['ckpt_path'] = dict['ckpt_path']
-        print(f"{Colors.CYAN}Caminho do checkpoint atualizado para o modelo recebido.{Colors.RESET}")
+        print(f"{Colors.CYAN}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
+
 
     # 2. Crie o modelo
     model = create_model(config)

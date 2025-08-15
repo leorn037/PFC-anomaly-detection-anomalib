@@ -547,7 +547,7 @@ def live_inference_rasp(model, config, camera):
         print(f"{Colors.RED}Ocorreu um erro durante o envio ou inferência: {e}{Colors.RESET}")
     finally:
         picam2.stop()
-        if config["websoket"]:
+        if config["websocket"]:
             sock.close()
         if hasattr(cv2, "destroyAllWindows") and os.environ.get("DISPLAY"):
             cv2.destroyAllWindows()

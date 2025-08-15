@@ -176,7 +176,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
             # 2. Recebe o pacote completo com barra de progresso
             data = b''
             bytes_received = 0
-            print(f"{Colors.BLUE}Recebendo dados: 0.00% [0 / {message_size} bytes]{Colors.RESET}", end="\n")
+            print(f"{Colors.BLUE}Recebendo dados: 0.00% [0 / {message_size} KB]{Colors.RESET}", end="\r")
             
             while bytes_received < message_size:
                 chunk = conn.recv(message_size - len(data))
