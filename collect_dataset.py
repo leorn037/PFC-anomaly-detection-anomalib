@@ -229,5 +229,5 @@ if __name__ == "__main__":
         time_sample=0.1,                       # Salvar um frame normal automaticamente a cada 0.5 segundos
         total_frames_to_collect=100,             # Parar a coleta automática de normais após 200 frames
         image_size=256,
-        camera = setup_camera(image_size)
+        camera = setup_camera(256)
     )
