@@ -115,7 +115,6 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
         'model_params': model_configs[model_name]["params"],
         'model_inference_params': model_configs[model_name].get("inference_params", {}),
         'model_file': model_bytes,
-        'file_name': config['file_name']
     }
     
     # 3. Serializa o dicionário completo com pickle
@@ -191,14 +190,23 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 return None
             message_size = struct.unpack("!I", message_size_data)[0]
             
-            # 2. Recebe o pacote completo
+            # 2. Recebe o pacote completo com barra de progresso
             data = b''
-            while len(data) < message_size:
+            bytes_received = 0
+            print(f"{Colors.BLUE}Recebendo dados: 0.00% [0 / {message_size} bytes]{Colors.RESET}", end="\r")
+            
+            while bytes_received < message_size:
                 chunk = conn.recv(message_size - len(data))
                 if not chunk: break
                 data += chunk
+                bytes_received += len(chunk)
+
+                # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
+                if bytes_received % 102400 == 0 or bytes_received == message_size:
+                    progress = (bytes_received / message_size) * 100
+                    print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received} / {message_size} bytes]{Colors.RESET}", end="\r")
             
-            if len(data) < message_size:
+            if bytes_received < message_size:
                 print(f"{Colors.YELLOW}Aviso: Conexão encerrada prematuramente. Pacote pode estar incompleto.{Colors.RESET}")
                 return None
             
@@ -210,9 +218,8 @@ def receive_model_from_pc(server_port: int, output_dir: str):
             model_params = payload['model_params']
             model_inference_params = payload['model_inference_params']
             model_file_bytes = payload['model_file']
-            file_name = payload['file_name']
             
-            file_path = output_path / file_name
+            file_path = output_path / f"{model_name}.ckpt"
 
             # Recebe o arquivo e salva
             with open(file_path, 'wb') as f:

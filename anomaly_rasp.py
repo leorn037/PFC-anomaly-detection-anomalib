@@ -67,9 +67,8 @@ def main():
         dict = receive_model_from_pc(config["receive_model_port"], config["model_output_dir"])
 
         config['model_name'] = model_name = dict['model_name']
-        MODEL_CONFIGS[model_name]['params'] = dict['model_]params']
+        MODEL_CONFIGS[model_name]['params'] = dict['model_params']
         MODEL_CONFIGS[model_name]['inference_params'] = dict['model_inference_params']
-        config['model_file']
         config['ckpt_path'] = dict['ckpt_path']
         print(f"{Colors.CYAN}Caminho do checkpoint atualizado para o modelo recebido.{Colors.RESET}")
 

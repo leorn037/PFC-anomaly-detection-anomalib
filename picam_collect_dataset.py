@@ -202,11 +202,10 @@ def collect_and_split_dataset(
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()
-        else:
+        elif hasattr(camera, 'stop'):
             # Se for a câmera da Raspberry Pi, use stop()
-            # Precisamos verificar se o objeto camera tem o método stop
-            if hasattr(camera, 'stop'):
-                camera.stop()
+            print(f"{Colors.CYAN}Desligando câmera...{Colors.RESET}")
+            camera.stop()
 
     print(f"{Colors.BOLD}{Colors.GREEN}\nColeta de imagens concluída!{Colors.RESET}")
     print(f"{Colors.BLUE}Foram coletadas {saved_auto_count} imagens automáticas e {saved_manual_count} imagens manuais.{Colors.RESET}")
