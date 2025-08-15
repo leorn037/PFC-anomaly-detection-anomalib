@@ -553,7 +553,7 @@ def live_inference_rasp(model, config, camera):
             cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
-def serve_inference_to_pi(model, pc_ip: str, pc_port: int, image_size: int):
+def serve_inference_to_pi(model, config):
     """
     Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
 
@@ -564,6 +564,11 @@ def serve_inference_to_pi(model, pc_ip: str, pc_port: int, image_size: int):
         image_size (int): O tamanho da imagem para inferência.
     """
     import struct
+
+    pc_ip = config["pc_ip"]
+    pc_port = config["receive_port"]
+    image_size = config["image_size"]
+    
     # Pré-processamento: as mesmas transformações usadas no treinamento
     transform_for_model = v2.Compose([
         v2.Resize((image_size, image_size)),
@@ -572,7 +577,6 @@ def serve_inference_to_pi(model, pc_ip: str, pc_port: int, image_size: int):
     ])
 
     model.eval() # Coloca o modelo em modo de avaliação
-    
     
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
         server_sock.bind((pc_ip, pc_port))

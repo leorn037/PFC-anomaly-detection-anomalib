@@ -4,7 +4,7 @@ import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, create_model, live_inference_rasp, visualize_imgs
 from collect_dataset import collect_and_split_dataset, setup_camera
-from net_func import receive_model_from_pc
+from net_func import receive_model_from_pc, live_inference_rasp_to_pc
 
 config = {
     # Rede
@@ -38,6 +38,7 @@ config = {
     "export_type": "onnx",
 
     "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
+    "pc_inference" : True,
 
     # Visualização
     "live" : True,
@@ -83,7 +84,8 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            live_inference_rasp(model, config, camera)
+            if config["pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 1)
+            else: live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"
         normal_dir = Path(config["normal_dir"])
