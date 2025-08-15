@@ -52,11 +52,6 @@ except ImportError:
         frame=cv2.resize(frame, (image_size, image_size))
         return frame
 
-# Configurações para o envio
-PC_IP = "192.168.15.3" # Mude para o IP do seu PC
-PC_PORT = 5006
-IMAGE_QUEUE = queue.Queue(maxsize=5) # Fila com limite de 10 imagens
-
 def has_gui():
     """Verifica se há uma interface gráfica disponível."""
     return 'DISPLAY' in os.environ and not os.environ['DISPLAY'] == ''
@@ -66,7 +61,10 @@ def collect_and_split_dataset(
     capture_dir: str = "temp_images", # Para imagens normais automáticas
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
-    image_size: int = 256
+    image_size: int = 256,
+    pc_ip = "192.168.15.3",
+    pc_port = 5007,
+
 ):
     """
     Coleta imagens de uma câmera, as salva temporariamente e as divide
@@ -82,6 +80,9 @@ def collect_and_split_dataset(
         time_sample (float): Intervalo de tempo em segundos para capturar imagens normais automaticamente.
         total_frames_to_collect (int): Número total de frames normais a serem coletados automaticamente.
     """
+    
+    # Configurações para o envio
+    IMAGE_QUEUE = queue.Queue(maxsize=5) # Fila com limite de 10 imagens
 
     # Definir o caminho para o diretório de captura bruta
     raw_path = Path(capture_dir)
@@ -107,7 +108,7 @@ def collect_and_split_dataset(
 
     # --- INÍCIO DA LÓGICA DE THREADS E FILAS ---
     stop_event = threading.Event()
-    sender_thread = threading.Thread(target=sender_thread_func, args=(stop_event, IMAGE_QUEUE, PC_IP, PC_PORT), daemon=True)
+    sender_thread = threading.Thread(target=sender_thread_func, args=(stop_event, IMAGE_QUEUE, pc_ip, pc_port), daemon=True)
     sender_thread.start()
     # --- FIM DA LÓGICA DE THREADS E FILAS ---
 

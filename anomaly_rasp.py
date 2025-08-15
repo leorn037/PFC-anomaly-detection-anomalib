@@ -12,11 +12,13 @@ config = {
     "receive_port": 5007,          # Porta para receber imagens
     "pi_port": 5008,       # Porta para enviar o modelo
     "pi_ip": "192.168.15.5",       # IP da Raspberry Pi
+    "pc_ip": "192.168.15.3",
 
     # Recebimento do modelo pela rasp
     "receive_model_port" : 5008,
     "receive_model" : True,
     "model_output_dir" : "models/received",
+    "file_name" : "model_test.ckpt",
 
     # Collecting images configs
     "collect" : True,
@@ -56,7 +58,9 @@ def main():
             capture_dir=config["normal_dir"], # Pasta para salvar as imagens brutas da câmera
             time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
             total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
-            image_size=config["image_size"]
+            image_size=config["image_size"],
+            pc_ip=config["pc_ip"],
+            pc_port=config["receive_model_port"]
         )
 
     if config["receive_model"]:

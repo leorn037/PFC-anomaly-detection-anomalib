@@ -11,14 +11,16 @@ config = {
     "receive_port": 5007,          # Porta para receber imagens
     "pi_port": 5008,       # Porta para enviar o modelo
     "pi_ip": "192.168.15.5",       # IP da Raspberry Pi
+    "pc_ip": "192.168.15.3",
 
     # Recebimento do modelo pela rasp
     "receive_model_port" : 5008,
-    "receive_model" : False,
+    "receive_model" : True,
     "model_output_dir" : "models/received",
+    "file_name" : "model_test.ckpt",
 
     # Collecting images configs
-    "collect" : False,
+    "collect" : True,
     "time_sample" : 0.2,
     "img_n" : 100,
 
@@ -38,9 +40,9 @@ config = {
     "export_type": "onnx",
 
     # 
-    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
     "live" : True,
-    "rasp" : False,
+    "rasp" : True,
     "websocket" : True,
     "udp_ip" : "192.168.15.5"
 }
