@@ -272,7 +272,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                 data = pickle.dumps(encoded_image)
                 message_size = struct.pack("!I", len(data))
                 
-                start_time = time.time()
+                start_time = time()
                 
                 # 3. Envia o tamanho da mensagem e os dados
                 sock.sendall(message_size + data)

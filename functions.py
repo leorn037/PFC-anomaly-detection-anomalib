@@ -590,6 +590,7 @@ def serve_inference_to_pi(model, config):
             # Loop principal de inferência
             while True:
                 try:
+                    start_time = time.time()
                     # 1. Recebe o tamanho da imagem
                     image_size_data = conn.recv(4)
                     if not image_size_data: break
@@ -610,7 +611,7 @@ def serve_inference_to_pi(model, config):
 
                     # 4. Executa a inferência
                     original_img_pil = Image.fromarray(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB))
-                    _, _, pred_score, _ = predict_image(model, original_img_pil, transform_for_model, image_size)
+                    _, anomaly_map, pred_score, pred_mask = predict_image(model, original_img_pil, transform_for_model, image_size)
                     
                     # 5. Obtém a flag de anomalia
                     is_anomaly = check_for_anomaly_by_score(pred_score, 0.5)
@@ -618,8 +619,37 @@ def serve_inference_to_pi(model, config):
                     # 6. Envia a flag de volta para a Raspberry Pi
                     response_flag = b'\x01' if is_anomaly else b'\x00'
                     conn.sendall(response_flag)
-                    
-                    print(f"Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
+
+                    # Pós-processamento para visualização com OpenCV:
+
+                    anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
+                    anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
+                                                    (decoded_image.shape[1], decoded_image.shape[0]), # (largura, altura)
+                                                    interpolation=cv2.INTER_LINEAR)
+            
+                    # Aplica um mapa de cores (heatmap) para melhor visualização
+                    anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
+
+                    # Adiciona o score na imagem original para display
+                    cv2.putText(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), 
+                                f"Score: {pred_score:.4f}", 
+                                (10, 30), # Posição do texto
+                                cv2.FONT_HERSHEY_SIMPLEX, 
+                                1,        # Tamanho da fonte
+                                (0, 255, 0), # Cor verde (BGR)
+                                2)        # Espessura da linha
+
+                    combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
+
+                    # 4. Visualização
+                    cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+
+                    # Saída ao pressionar 'q'
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
+                        break
+
+                    print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
 
                 except ConnectionResetError:
                     print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
@@ -628,6 +658,7 @@ def serve_inference_to_pi(model, config):
                     print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
                     break
 
+            
 
 # Abordagem é a mais simples.
 # Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.

@@ -14,12 +14,12 @@ config = {
     "pc_ip": "leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
-    "collect" : True,
+    "collect" : False,
     "time_sample" : 0.2,
     "img_n" : 100,
 
     # Recebimento do modelo pela rasp
-    "receive_model" : True,
+    "receive_model" : False,
     "model_output_dir" : "models/received",
 
     # Dataset configs
@@ -33,7 +33,7 @@ config = {
 
     # Model configs
     "model_name": 'DFM',
-    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
+    "ckpt_path": None,
     
     "export_type": "onnx",
     
@@ -55,6 +55,7 @@ def main():
     if config["collect"]:
         receive_all_images_and_save(config["img_n"], receive_path, config["receive_port"])
         print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
+    else: print(f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}")
 
     # --- Passo 2: Executar o treinamento com as imagens recebidas ---
     dataset_root = Path(config["dataset_root"])
@@ -77,9 +78,8 @@ def main():
     results_path = Path("results") / config["model_name"] / config["folder_name"]
     model_path = get_latest_checkpoint(results_path)
 
-    if model_path:
-        if config["on_pc_inference"]: serve_inference_to_pi(model, config)
-        else: send_model_to_pi(model_path,config, MODEL_CONFIGS)
+    if model_path and config["receive_model"]:
+        send_model_to_pi(model_path,config, MODEL_CONFIGS)
     else:
         print(f"{Colors.RED}Erro: Não foi possível encontrar o modelo treinado para enviar.{Colors.RESET}")
     
