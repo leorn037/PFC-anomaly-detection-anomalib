@@ -62,6 +62,7 @@ def main():
             pc_ip=config["pc_ip"],
             pc_port=config["receive_port"]
         )
+    else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}"
 
     if config["receive_model"] and not config["on_pc_inference"]:
         start_time = time.time()
@@ -73,6 +74,7 @@ def main():
         MODEL_CONFIGS[model_name]['inference_params'] = dict['model_inference_params']
         config['ckpt_path'] = dict['ckpt_path']
         print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
+    else: f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}"
 
     if not config["on_pc_inference"]:
         # 2. Crie o modelo
@@ -85,7 +87,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            if config["on_pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 1)
+            if config["on_pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120)
             else: live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"

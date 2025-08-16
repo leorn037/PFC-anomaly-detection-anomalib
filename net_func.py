@@ -242,7 +242,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 "ckpt_path": str(file_path)
             }
 
-def live_inference_rasp_to_pc(picam2, config, timeout: int = 1):
+def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
     """
     Captura frames, envia para um PC para inferência e recebe o resultado.
 
