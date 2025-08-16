@@ -79,7 +79,7 @@ def main():
     model_path = get_latest_checkpoint(results_path)
 
     if not config["receive_model"]:
-        send_flag()
+        send_flag(config)
     elif model_path:
         send_model_to_pi(model_path,config, MODEL_CONFIGS)
     else:

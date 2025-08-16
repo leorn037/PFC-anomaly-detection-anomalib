@@ -65,6 +65,7 @@ def main():
     else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}"
 
     if config["on_pc_inference"]:
+         print(f"{Colors.CYAN}Esperando confirmação de treinamento...{Colors.RESET}")
          rasp_wait_flag(config)
     elif config["receive_model"]:
         start_time = time.time()
