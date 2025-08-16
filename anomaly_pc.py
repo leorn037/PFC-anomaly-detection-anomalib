@@ -46,8 +46,9 @@ config = {
 }
 
 def main():
-    print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     anomaly_args(config,"pc")
+    print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
+    
     # --- Passo 1: Receber todas as imagens da Raspberry Pi ---
     
     receive_path = Path(config["normal_dir"])
