@@ -285,7 +285,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                         break
                         
                     is_anomaly = response_flag_bytes == b'\x01'
-                    end_time = time.time()
+                    end_time = time()
                     
                     status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
                     
