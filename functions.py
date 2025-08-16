@@ -589,14 +589,12 @@ def serve_inference_to_pi(model, config):
             
             # Loop principal de inferência
             while True:
-                print("while true")
                 try:
                     start_time = time.time()
                     # 1. Recebe o tamanho da imagem
                     image_size_data = conn.recv(4)
                     if not image_size_data: break
                     image_size = struct.unpack("!I", image_size_data)[0]
-                    print("recebido tam")
                     
                     # 2. Recebe a imagem completa
                     image_data = b''
@@ -604,7 +602,6 @@ def serve_inference_to_pi(model, config):
                         packet = conn.recv(image_size - len(image_data))
                         if not packet: break
                         image_data += packet
-                    print("recebido img")
                     
                     if not image_data: break
                     
@@ -618,11 +615,10 @@ def serve_inference_to_pi(model, config):
                     
                     # 5. Obtém a flag de anomalia
                     is_anomaly = check_for_anomaly_by_score(pred_score, 0.5)
-                    print("a enviar flag")
+
                     # 6. Envia a flag de volta para a Raspberry Pi
                     response_flag = b'\x01' if is_anomaly else b'\x00'
                     conn.sendall(response_flag)
-                    print("flag")
 
                     # Pós-processamento para visualização com OpenCV:
 
@@ -645,7 +641,6 @@ def serve_inference_to_pi(model, config):
 
                     combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
 
-                    print("a mostrar")
                     # 4. Visualização
                     cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
 

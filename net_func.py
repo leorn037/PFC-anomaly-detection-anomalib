@@ -262,11 +262,11 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
             sock.settimeout(timeout) # Define um timeout para as operações de socket
             sock.connect((pc_ip, pc_port))
             print(f"{Colors.GREEN}Conexão estabelecida com sucesso. Pressione 'Ctrl+C' para sair.{Colors.RESET}")
+            picam2.start()
             
             while True:
                 # 1. Captura o frame da câmera
                 frame = picam2.capture_array()
-                print("frame")
                 
                 # 2. Codifica e serializa o frame
                 _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
@@ -275,10 +275,8 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                 
                 start_time = time()
                 
-                print("a enviar")
                 # 3. Envia o tamanho da mensagem e os dados
                 sock.sendall(message_size + data)
-                print("enviado")
                 
                 # 4. Espera a resposta do PC
                 try:
