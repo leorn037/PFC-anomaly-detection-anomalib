@@ -38,7 +38,7 @@ config = {
     "export_type": "onnx",
 
     "operation" : 'Inference', # Operação com modelo ('Inference','Train','Continue')
-    "pc_inference" : True,
+    "on_pc_inference" : True,
 
     # Visualização
     "live" : True,
@@ -62,7 +62,7 @@ def main():
             pc_port=config["receive_port"]
         )
 
-    if config["receive_model"]:
+    if config["receive_model"] and not config["on_pc_inference"]:
         start_time = time.time()
         dict = receive_model_from_pc(config["pi_port"], config["model_output_dir"])
         receive_model_time = time.time() - start_time
@@ -84,7 +84,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            if config["pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 1)
+            if config["on_pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 1)
             else: live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"

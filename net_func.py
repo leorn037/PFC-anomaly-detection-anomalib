@@ -43,7 +43,7 @@ def sender_thread_func(stop_event, image_queue, pc_ip, pc_port):
                 print(f"{Colors.RED}Não foi possível conectar ao cliente, enviando imagens desativado.{Colors.RESET}")
                 return
     except ConnectionRefusedError:
-        print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro: O PC recusou a conexão. Verifique se o servidor está rodando.")
+        print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro: O PC {pc_ip} recusou a conexão. Verifique se o servidor está rodando.")
     except Exception as e:
         print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro inesperado: {e}")
 
@@ -158,7 +158,7 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
             print(f"{Colors.GREEN}Modelo enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
             
     except ConnectionRefusedError:
-        print(f"{Colors.RED}Erro: Raspberry Pi recusou a conexão. Verifique se o servidor de recepção está rodando.{Colors.RESET}")
+        print(f"{Colors.RED}Erro: Raspberry Pi {pi_ip} recusou a conexão. Verifique se o servidor de recepção está rodando.{Colors.RESET}")
     except Exception as e:
         print(f"{Colors.RED}Erro ao enviar o modelo: {e}{Colors.RESET}")
 
@@ -300,7 +300,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 1):
                     break
     
     except ConnectionRefusedError:
-        print(f"{Colors.RED}Erro: Conexão recusada. O servidor no PC não está online ou a porta está incorreta.{Colors.RESET}")
+        print(f"{Colors.RED}Erro: Conexão recusada. O servidor no PC {pc_ip} não está online ou a porta {pc_port}está incorreta.{Colors.RESET}")
     except socket.timeout:
         print(f"{Colors.RED}Erro: Tempo limite excedido ao tentar conectar ao PC.{Colors.RESET}")
     except KeyboardInterrupt:

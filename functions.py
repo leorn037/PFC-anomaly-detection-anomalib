@@ -565,10 +565,10 @@ def serve_inference_to_pi(model, config):
     """
     import struct
 
-    pc_ip = config["pc_ip"]
-    pc_port = config["receive_port"]
+    pi_ip = config["pi_ip"]
+    pi_port = config["pi_port"]
     image_size = config["image_size"]
-    
+
     # Pré-processamento: as mesmas transformações usadas no treinamento
     transform_for_model = v2.Compose([
         v2.Resize((image_size, image_size)),
@@ -579,9 +579,9 @@ def serve_inference_to_pi(model, config):
     model.eval() # Coloca o modelo em modo de avaliação
     
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-        server_sock.bind((pc_ip, pc_port))
+        server_sock.bind((pi_ip, pi_port))
         server_sock.listen(1)
-        print(f"{Colors.GREEN}Servidor pronto. Aguardando conexão da Raspberry Pi em {pc_ip}:{pc_port}...{Colors.RESET}")
+        print(f"{Colors.GREEN}Servidor pronto. Aguardando conexão da Raspberry Pi em {pi_ip}:{pi_port}...{Colors.RESET}")
         
         conn, addr = server_sock.accept()
         with conn:
