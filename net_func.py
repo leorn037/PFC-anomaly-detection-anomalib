@@ -308,3 +308,23 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
     finally:
         picam2.stop()
         print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")
+
+def rasp_wait_flag(config):
+    host = '0.0.0.0'
+    port = config["receive_port"]
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind((host, port))
+        server.listen(1)
+        print(f"Aguardando flag em {host}:{port}...")
+        conn, addr = server.accept()
+        with conn:
+            data = conn.recv(1024)
+            if data == b"OK":
+                print("Flag recebida, continuando...")
+
+def send_flag(config):
+    pc_ip = config["pc_ip"]
+    port = config["receive_port"]
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.connect((pc_ip, port))
+        sock.sendall(b"OK")

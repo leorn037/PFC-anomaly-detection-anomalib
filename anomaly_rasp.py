@@ -4,7 +4,7 @@ import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, create_model, live_inference_rasp, visualize_imgs, anomaly_args
 from collect_dataset import collect_and_split_dataset, setup_camera
-from net_func import receive_model_from_pc, live_inference_rasp_to_pc
+from net_func import receive_model_from_pc, live_inference_rasp_to_pc, rasp_wait_flag
 
 config = {
     # Rede
@@ -64,7 +64,9 @@ def main():
         )
     else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}"
 
-    if config["receive_model"] and not config["on_pc_inference"]:
+    if config["on_pc_inference"]:
+         rasp_wait_flag(config)
+    elif config["receive_model"]:
         start_time = time.time()
         dict = receive_model_from_pc(config["pi_port"], config["model_output_dir"])
         receive_model_time = time.time() - start_time

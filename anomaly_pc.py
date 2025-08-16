@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 init_time = time.time()
 from functions import Colors, MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint, live_inference_opencv, visualize_imgs, anomaly_args, serve_inference_to_pi
-from net_func import receive_all_images_and_save, send_model_to_pi 
+from net_func import receive_all_images_and_save, send_model_to_pi, send_flag
 from collect_dataset import setup_camera
 
 config = {
@@ -14,7 +14,7 @@ config = {
     "pc_ip": "leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
-    "collect" : False,
+    "collect" : True,
     "time_sample" : 0.2,
     "img_n" : 100,
 
@@ -78,7 +78,9 @@ def main():
     results_path = Path("results") / config["model_name"] / config["folder_name"]
     model_path = get_latest_checkpoint(results_path)
 
-    if model_path and config["receive_model"]:
+    if not config["receive_model"]:
+        send_flag()
+    elif model_path:
         send_model_to_pi(model_path,config, MODEL_CONFIGS)
     else:
         print(f"{Colors.RED}Erro: Não foi possível encontrar o modelo treinado para enviar.{Colors.RESET}")
