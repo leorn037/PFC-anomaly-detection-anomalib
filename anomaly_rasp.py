@@ -2,7 +2,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import time
 init_time = time.time()
-from functions import Colors, MODEL_CONFIGS, create_model, live_inference_rasp, visualize_imgs
+from functions import Colors, MODEL_CONFIGS, create_model, live_inference_rasp, visualize_imgs, anomaly_args
 from collect_dataset import collect_and_split_dataset, setup_camera
 from net_func import receive_model_from_pc, live_inference_rasp_to_pc
 
@@ -11,7 +11,7 @@ config = {
     "receive_port": 5007,      # Porta para receber imagens
     "pi_port": 5008,           # Porta para enviar o modelo
     "pi_ip": "raspberrypi",   # IP da Raspberry Pi
-    "pc_ip": "DESKTOP-CK3CNOB", #"leorn037-ACER",   # IP do PC
+    "pc_ip": "192.168.15.2", #"leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
     "collect" : True,
@@ -47,6 +47,7 @@ config = {
 
 
 def main():
+    anomaly_args(config,"rasp")
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     # 1. Prepare dataset:
     camera = setup_camera(config["image_size"])
@@ -62,7 +63,7 @@ def main():
             pc_port=config["receive_port"]
         )
 
-    if config["receive_model"] and not config["on_pc_inference"]:
+    if config["receive_model"]:
         start_time = time.time()
         dict = receive_model_from_pc(config["pi_port"], config["model_output_dir"])
         receive_model_time = time.time() - start_time
