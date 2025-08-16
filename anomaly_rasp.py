@@ -33,7 +33,7 @@ config = {
 
     # Model configs
     "model_name": 'DFKDE',
-    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/results/PatchCore/Test/v95/weights/lightning/model.ckpt", # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
+    "ckpt_path": None, # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
     
     "export_type": "onnx",
 
@@ -63,7 +63,7 @@ def main():
             pc_port=config["receive_port"]
         )
 
-    if config["receive_model"]:
+    if config["receive_model"] and not config["on_pc_inference"]:
         start_time = time.time()
         dict = receive_model_from_pc(config["pi_port"], config["model_output_dir"])
         receive_model_time = time.time() - start_time
@@ -74,10 +74,10 @@ def main():
         config['ckpt_path'] = dict['ckpt_path']
         print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
 
-
-    # 2. Crie o modelo
-    model = create_model(config)
-    if model == None: return
+    if not config["on_pc_inference"]:
+        # 2. Crie o modelo
+        model = create_model(config)
+        if model == None: return
 
     # --- 6. Verificação e visualização da detecção individual por código ---
     print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
