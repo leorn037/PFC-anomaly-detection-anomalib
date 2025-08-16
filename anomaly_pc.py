@@ -78,7 +78,8 @@ def main():
     model_path = get_latest_checkpoint(results_path)
 
     if model_path:
-        send_model_to_pi(model_path,config, MODEL_CONFIGS)
+        if config["on_pc_inference"]: serve_inference_to_pi(model, config)
+        else: send_model_to_pi(model_path,config, MODEL_CONFIGS)
     else:
         print(f"{Colors.RED}Erro: Não foi possível encontrar o modelo treinado para enviar.{Colors.RESET}")
     
