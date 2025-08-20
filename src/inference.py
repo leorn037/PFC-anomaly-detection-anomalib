@@ -79,6 +79,7 @@ def visualize_imgs(path_dir, model, img_class, image_size):
             
             # Exibe a imagem combinada
             window_name = f"Original ({img_class}) - Score: {score:.4f} | Anomaly Map"
+            
             cv2.imshow(window_name, combined_img)
 
             print(f"{Colors.CYAN}Pressione qualquer tecla para a próxima imagem...{Colors.RESET}")

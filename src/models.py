@@ -28,7 +28,7 @@ MODEL_CONFIGS = {
         "class": Padim,
         "params": {
             "backbone": 'resnet18',
-            "layers": [ "layer2", "layer3"], # "layer1",
+            "layers": ["layer1", "layer2", "layer3"], # ,
             #"n_features": 100, #resnet18=100
             "pre_trained": True,
         },

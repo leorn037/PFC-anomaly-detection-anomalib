@@ -64,7 +64,7 @@ def main():
             else: live_inference_opencv(model, config["image_size"])
     else:
         #normal_dir = dataset_root / "test" / "normal"
-        normal_dir = Path(config["normal_dir"])
+        normal_dir = Path(config["normal_test_dir"])
         img_class="Normal"
         visualize_imgs(normal_dir, model, img_class, config["image_size"])
 

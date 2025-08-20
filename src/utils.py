@@ -20,35 +20,35 @@ CONFIG = {
     "pc_ip": "192.168.15.2", #"leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
-    "collect" : False,
+    "collect" : True, # Coleta de Imagens pela Rasp para treinamento
     "time_sample" : 0.2,
     "img_n" : 100,
 
     # Recebimento do modelo pela rasp
-    "receive_model" : False,
+    "receive_model" : True, # Envio do PC / Recebimento pela Rasp do modelo
     "model_output_dir" : "models/received",
 
     # Dataset configs
-    "dataset_root": 'C:/Users/Leonardo/Downloads/Programas/PFC/brnch/img_256',
-    "image_size": 256, # Defina o tamanho da imagem para redimensionamento
+    "dataset_root": 'C:/Users/Leonardo/Downloads/Programas/PFC/src/img_256',
+    "image_size": 640, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 8,
     "folder_name": 'Test',
-    "normal_dir": "img_640/normal",#"data/train/normal", # Imagens normais para treinamento
+    "normal_dir": "img_256/normal", # Imagens normais para treinamento
     "abnormal_test_dir": "img_640/abnormal", # Imagens anômalas para teste
-    "normal_test_dir": "img_256/normal", # Imagens normais para teste
+    "normal_test_dir": "img_640/test", # Imagens normais para teste
 
     # Model configs
-    "model_name": 'PatchCore',
-    "ckpt_path": None, # None, "C:/Users/Leonardo/Downloads/Programas/PFC/weights/onnx/model_onnx.onnx"
+    "model_name": 'Padim',
+    "ckpt_path": None, 
     
     "export_type": "onnx",
 
     "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
-    "on_pc_inference" : True, # Executa inferência no pc
+    "on_pc_inference" : True, # Executa inferência no PC com imagens da Raspberry
 
     # Visualização
-    "live" : False,
-    "websocket" : False,
+    "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas
+    "websocket" : True, # Envio via websocket da Raspberry para o PC
 }
 
 
