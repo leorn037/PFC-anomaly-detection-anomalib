@@ -17,7 +17,7 @@ CONFIG = {
     "receive_port": 5007,      # Porta para receber imagens
     "pi_port": 5008,           # Porta para enviar o modelo
     "pi_ip": "raspberrypi",   # IP da Raspberry Pi
-    "pc_ip": "192.168.15.2", #"leorn037-ACER",   # IP do PC
+    "pc_ip": "10.14.53.254", #"leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
     "collect" : True, # Coleta de Imagens pela Rasp para treinamento
@@ -25,7 +25,7 @@ CONFIG = {
     "img_n" : 100,
 
     # Recebimento do modelo pela rasp
-    "receive_model" : True, # Envio do PC / Recebimento pela Rasp do modelo
+    "receive_model" : False, # Envio do PC / Recebimento pela Rasp do modelo
     "model_output_dir" : "models/received",
 
     # Dataset configs
