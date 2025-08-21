@@ -27,6 +27,7 @@ def main():
             time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
             total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
             image_size=config["image_size"],
+            crop_size=config["crop_x"],
             pc_ip=config["pc_ip"],
             pc_port=config["receive_port"]
         )

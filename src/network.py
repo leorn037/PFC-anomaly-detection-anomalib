@@ -130,9 +130,6 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
 
             cv2.destroyAllWindows()
 
-    
-
-
 # Função para enviar o modelo
 def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
     """

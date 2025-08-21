@@ -53,7 +53,6 @@ CONFIG = {
     "websocket" : True, # Envio via websocket da Raspberry para o PC
 }
 
-
 import argparse
 
 # Função de conversão customizada
