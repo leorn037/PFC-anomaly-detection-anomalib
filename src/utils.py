@@ -30,7 +30,7 @@ CONFIG = {
 
     # Dataset configs
     "dataset_root": 'C:/Users/Leonardo/Downloads/Programas/PFC/src/img_256',
-    "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
+    "image_size": 640, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 8,
     "folder_name": 'Test',
     "normal_dir": "img_640/normal", # Imagens normais para treinamento

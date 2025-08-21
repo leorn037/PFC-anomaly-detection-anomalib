@@ -60,6 +60,18 @@ def sender_thread_func(stop_event, image_queue, pc_ip, pc_port):
                         # Envia o tamanho da mensagem e os dados
                         sock.sendall(message_size + data)
                         print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Imagem enviada. Tamanho: {len(data)} bytes.")
+
+                        # Tenta receber flag de status (não bloqueante)
+                        sock.settimeout(0.01)
+                        try:
+                            msg = sock.recv(16).decode().strip()
+                            if msg:
+                                print(f"{Colors.YELLOW}Flag recebida do PC: {msg}{Colors.RESET}")
+                                # Aqui você pode acender LED, mudar estado, etc.
+                        except socket.timeout:
+                            pass
+
+
                     except queue.Empty: # Se a fila estiver vazia, apenas continua o loop e verifica o stop_event
                         continue
                     except (ConnectionError, BrokenPipeError) as e:
@@ -94,37 +106,68 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
         conn, addr = server_sock.accept()
         
         with conn:
+            # --- Configuração do socket para não bloquear ---
+            conn.settimeout(0.01) # Timeout muito curto para não travar
+
             connection_time = time.time() - start_time
             print(f"{Colors.GREEN}Conexão aceita de {addr} em {connection_time:.2f} segundos. Recebendo {num_images} imagens...{Colors.RESET}")
-            for i in range(num_images):
-                # Recebe o tamanho da mensagem
-                message_size_data = conn.recv(4)
-                if not message_size_data: break
-                message_size = struct.unpack("!I", message_size_data)[0]
+            print(f"{Colors.GREEN}Pressione '{Colors.CYAN}c{Colors.RESET}' para iniciar a coleta de {num_images} imagens.{Colors.RESET}")
+            print(f"{Colors.GREEN}Pressione '{Colors.CYAN}q{Colors.RESET}' para finalizar.{Colors.RESET}")
 
-                # Recebe os dados
-                data = b''
-                while len(data) < message_size:
-                    packet = conn.recv(message_size - len(data))
-                    if not packet: break
-                    data += packet
-                
-                # Decodifica e salva a imagem
-                encoded_image = pickle.loads(data)
-                decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
-                
-                if decoded_image is not None:
-                    filename = save_path / f"img_{i:04d}.jpg"
-                    cv2.imwrite(str(filename), decoded_image)
-                    print(f"{Colors.GREEN}Imagem {i+1}/{num_images} recebida e salva em {filename}{Colors.RESET}")
+            saving = False
+            img_count = 0
+
+            while True:
+                try:
+                    # Recebe o tamanho da mensagem
+                    message_size_data = conn.recv(4)
+                    if not message_size_data: break
+                    message_size = struct.unpack("!I", message_size_data)[0]
+
+                    # Recebe os dados
+                    data = b''
+                    while len(data) < message_size:
+                        packet = conn.recv(message_size - len(data))
+                        if not packet: break
+                        data += packet
                     
+                    # Decodifica e salva a imagem
+                    encoded_image = pickle.loads(data)
+                    decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+
+                    if decoded_image is None:
+                        continue
+
                     # Exibe a imagem
                     cv2.imshow("Recepção de Imagens", decoded_image)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print(f"{Colors.YELLOW}Interrompido pelo usuário.{Colors.RESET}")
+
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('c') and not saving:
+                        # Envia o comando para a Pi começar a salvar
+                        conn.sendall(b'START_SAVE')
+                        saving = True
+                        print(f"{Colors.YELLOW}Comando 'START_SAVE' enviado. Iniciando salvamento local.{Colors.RESET}")
+                    elif key == ord('q'):
+                        print(f"{Colors.YELLOW}Saindo...{Colors.RESET}")
                         break
-                else:
-                    print(f"{Colors.RED}Falha ao decodificar a imagem {i+1}.{Colors.RESET}")
+                    
+                    # Lógica de salvamento, agora controlada pela flag `saving`
+                    if saving and img_count < num_images:
+                        filename = save_path / f"img_{img_count:04d}.jpg"
+                        cv2.imwrite(str(filename), decoded_image)
+                        img_count += 1
+                        print(f"{Colors.GREEN}Salvo {img_count}/{num_images}{Colors.RESET}")
+
+                        if img_count >= num_images:
+                            print(f"{Colors.YELLOW}Coleta finalizada ({num_images} imagens salvas){Colors.RESET}")
+                            saving = False  # Para de salvar
+                            break
+                except (ConnectionResetError, BrokenPipeError):
+                    print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
+                    break
+                except Exception as e:
+                    print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+                    break
 
             cv2.destroyAllWindows()
 

@@ -1,12 +1,10 @@
 import cv2
 import time
 import os
-import shutil
 from pathlib import Path
 from datetime import datetime
 from utils import Colors
 from network import crop_and_resize
-import queue
 
 try:
     from picamera2 import Picamera2
@@ -95,26 +93,31 @@ def collect_and_split_dataset(
     # 1. Obtém a data e hora atuais
     current_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    # Configurações para o envio
-    IMAGE_QUEUE = queue.Queue(maxsize=5) # Fila com limite de 10 imagens
-
     # Definir o caminho para o diretório de captura bruta
     raw_path = Path(output_base_dir) / f"images_{current_timestamp}"
     
     raw_path.mkdir(parents=True, exist_ok=False)
     print(f"{Colors.GREEN}Criando novo diretório de captura em: {raw_path}{Colors.RESET}")
 
-    is_headless = not has_gui()
-
-    # --- INÍCIO DA LÓGICA DE THREADS E FILAS ---
+    sock = None
     if pc_ip and pc_port:
-        import threading
-        from network import sender_thread_func
-        stop_event = threading.Event()
-        sender_thread = threading.Thread(target=sender_thread_func, args=(stop_event, IMAGE_QUEUE, pc_ip, pc_port), daemon=True)
-        sender_thread.start()
-    # --- FIM DA LÓGICA DE THREADS E FILAS ---
+        try:
+            import socket
+            import pickle
+            import struct
+            print(f"[{Colors.CYAN}Rede{Colors.RESET}] Tentando conectar ao PC em {pc_ip}:{pc_port}...")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((pc_ip, pc_port))
+            sock.settimeout(time_sample) # Timeout curto para o recv no loop principal
+            print(f"[{Colors.GREEN}Rede{Colors.RESET}] Conexão estabelecida com sucesso.")
+        except (socket.timeout, ConnectionRefusedError):
+            print(f"[{Colors.RED}Rede{Colors.RESET}] Não foi possível conectar ao PC. O envio de imagens e controle remoto estão desativados.")
+            sock = None
+        except Exception as e:
+            print(f"[{Colors.RED}Rede{Colors.RESET}] Erro inesperado ao conectar: {e}")
+            sock = None
 
+    is_headless = not has_gui()
     if is_headless:
         print(f"\n{Colors.CYAN}--- Modo de Coleta Headless (Sem GUI) ---{Colors.RESET}")
         print(f"{Colors.YELLOW}Não foi detectada uma interface gráfica. A coleta será totalmente automática.{Colors.RESET}")
@@ -135,28 +138,52 @@ def collect_and_split_dataset(
     last_capture_auto = init_time
     saved_auto_count = 0
     saved_manual_count = 0
-    saving = is_headless
+    saving = False
 
     try:
         while True:
             # Captura a imagem da câmera
             frame_bgr = get_frame(camera,image_size)
-            frame_bgr = crop_and_resize(frame_bgr, 
-                                        x0=126, y0=0,
-                                        x1=421, y1=image_size,
-                                        size=None)
-
             if frame_bgr is None:
                 print("Erro: Não foi possível ler o frame.")
                 break
 
+            frame_bgr = crop_and_resize(frame_bgr, 
+                            x0=126, y0=0,
+                            x1=421, y1=image_size,
+                            size=None)
+
             current_time = time.time()
 
+            # --- Lógica de Rede (se a conexão existir) ---
+            if sock:
+                try:
+                    # Envia o frame para o PC
+                    _, encoded_image = cv2.imencode('.jpg', frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                    data = pickle.dumps(encoded_image)
+                    message_size = struct.pack("!I", len(data))
+                    sock.sendall(message_size + data)
+
+                    # Tenta receber um comando do PC de forma não-bloqueante
+                    try:
+                        command = sock.recv(16).decode().strip()
+                        if command == "START_SAVE":
+                            saving = True
+                            saved_auto_count = 0
+                            print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Iniciando salvamento automático por comando do PC.")
+                        elif command == "STOP_SAVE":
+                             saving = False
+                             print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Parando salvamento por comando do PC.")
+                    except socket.timeout:
+                        pass # Continua se não houver dados para receber
+                except (ConnectionError, BrokenPipeError) as e:
+                    print(f"[{Colors.RED}Rede{Colors.RESET}] Erro de conexão: {e}. Desativando o streaming.")
+                    sock.close()
+                    sock = None
+
+            # --- Lógica de Salvamento ---
             # Lógica para captura automática de imagens
             if saving and saved_auto_count < total_frames_to_collect and (current_time - last_capture_auto >= time_sample):
-                # A thread de envio pegará a imagem da fila em segundo plano
-                if not IMAGE_QUEUE.full():
-                    IMAGE_QUEUE.put(frame_bgr)
                 timestamp = int(time.time() * 1000)
                 filename = os.path.join(raw_path, f"auto_img_{saved_auto_count:04d}_{timestamp}.jpg")
                 cv2.imwrite(filename, frame_bgr)
@@ -194,9 +221,9 @@ def collect_and_split_dataset(
                 break
     finally:
         # --- DESLIGAMENTO SEGURO DA THREAD ---
-        if pc_ip and pc_port:
-            stop_event.set()
-            sender_thread.join(timeout=1)  # Espera no máximo 1 segundo
+        if sock:
+            sock.close()
+            print(f"{Colors.CYAN}Conexão de rede encerrada.{Colors.RESET}")
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()
@@ -204,6 +231,8 @@ def collect_and_split_dataset(
             # Se for a câmera da Raspberry Pi, use stop()
             print(f"{Colors.CYAN}Desligando câmera...{Colors.RESET}")
             camera.stop()
+        if not is_headless:
+            cv2.destroyAllWindows()
 
     print(f"{Colors.BOLD}{Colors.GREEN}\nColeta de imagens concluída!{Colors.RESET}")
     print(f"{Colors.BLUE}Foram coletadas {saved_auto_count} imagens automáticas e {saved_manual_count} imagens manuais.{Colors.RESET}")
