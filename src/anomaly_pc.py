@@ -35,9 +35,10 @@ def main():
     print(f"{Colors.BLUE}Treinamento concluído em {training_time:.2f} segundos.{Colors.RESET}")
 
     # --- 5. Avaliação com métricas (no conjunto de teste preparado) ---
-    print(f"{Colors.BLUE}Iniciando avaliação do modelo no conjunto de teste...{Colors.RESET}")
-    test_results, eval_time = evaluate_model(engine, model, datamodule)
-    print(f"{Colors.BLUE}Resultados da avaliação concluída em {eval_time:.2f}:{Colors.RESET}")
+    if config["evaluate"]: 
+        print(f"{Colors.BLUE}Iniciando avaliação do modelo no conjunto de teste...{Colors.RESET}")
+        test_results, eval_time = evaluate_model(engine, model, datamodule)
+        print(f"{Colors.BLUE}Resultados da avaliação concluída em {eval_time:.2f}:{Colors.RESET}")
 
     # --- Passo 3: Enviar o modelo treinado para a Raspberry Pi ---
     # Encontre o caminho do checkpoint mais recente
