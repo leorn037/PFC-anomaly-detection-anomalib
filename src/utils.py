@@ -17,13 +17,13 @@ CONFIG = {
     "receive_port": 5007,      # Porta para receber imagens
     "pi_port": 5008,           # Porta para enviar o modelo
     "pi_ip": "raspberrypi",   # IP da Raspberry Pi
-    "pc_ip": "10.14.53.254", #"leorn037-ACER",   # IP do PC
+    "pc_ip": "leorn037-ACER.local", #"leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
     "collect" : True, # Coleta de Imagens pela Rasp para treinamento
     "time_sample" : 0.2,
     "img_n" : 100,
-    "crop_x" : (126, 421),
+    "crop_x" : (180, 470),
 
     # Recebimento do modelo pela rasp
     "receive_model" : False, # Envio do PC / Recebimento pela Rasp do modelo
@@ -31,8 +31,8 @@ CONFIG = {
 
     # Dataset configs
     "dataset_root": 'C:/Users/Leonardo/Downloads/Programas/PFC/src/img_256',
-    "image_size": 640, # Defina o tamanho da imagem para coleta e redimensionamento
-    "batch_size": 8,
+    "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
+    "batch_size": 32,
     "folder_name": 'Test',
     "normal_dir": "img_640/normal", # Imagens normais para treinamento
     "abnormal_test_dir": "img_640/abnormal", # Imagens anômalas para teste

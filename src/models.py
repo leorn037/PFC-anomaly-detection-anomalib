@@ -17,7 +17,7 @@ MODEL_CONFIGS = {
         "params": {
             "backbone": "resnet10t", 
             "layers": ("layer2", "layer3"), # ["blocks.2", "blocks.4"]
-            "coreset_sampling_ratio": 0.01,
+            "coreset_sampling_ratio": 0.1,
             "num_neighbors": 9
         },
         "inference_params": {

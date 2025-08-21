@@ -2,13 +2,7 @@ from utils import Colors, CONFIG as config, anomaly_args, print_config_summary
 anomaly_args(config,"pc")
 print_config_summary(config, "pc")
 
-from pathlib import Path
-import matplotlib.pyplot as plt
-import time
-init_time = time.time()
-from models import MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint
-from inference import live_inference_opencv, visualize_imgs, serve_inference_to_pi
-from network import receive_all_images_and_save, send_model_to_pi, send_flag, receive_and_process_data
+
 
 
 def main():
@@ -79,6 +73,16 @@ def main():
 
 
 if __name__ == "__main__":
+
+    from pathlib import Path
+    import matplotlib.pyplot as plt
+    import time
+    init_time = time.time()
+    from models import MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint
+    from inference import live_inference_opencv, visualize_imgs, serve_inference_to_pi
+    from network import receive_all_images_and_save, send_model_to_pi, send_flag, receive_and_process_data
+
+
     print(f"{Colors.BLUE}Bibliotecas importadas em {time.time()-init_time:.2f} segundos.{Colors.RESET}")
     import warnings
     import os
