@@ -19,14 +19,15 @@ def main():
         rasp_wait_flag(config)
 
     # 1. Prepare dataset:
-    camera = setup_camera(config["image_size"])
+    cam_img_size = 256
+    camera = setup_camera(cam_img_size)
     if config["collect"]: # Novo dataset
         collect_and_split_dataset(
             camera,
             output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
             time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
             total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
-            image_size=config["image_size"],
+            image_size=cam_img_size,
             crop_size=config["crop_x"],
             pc_ip=config["pc_ip"],
             pc_port=config["receive_port"]

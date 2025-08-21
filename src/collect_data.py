@@ -71,7 +71,7 @@ def collect_and_split_dataset(
     output_base_dir: str = "data",
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
-    image_size: int = 256,
+    image_size: int = 640,
     crop_size = (126, 421),
     pc_ip = None,
     pc_port = None,
