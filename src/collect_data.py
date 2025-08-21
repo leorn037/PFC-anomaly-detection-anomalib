@@ -72,6 +72,7 @@ def collect_and_split_dataset(
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
     image_size: int = 256,
+    crop_size = (126, 421),
     pc_ip = None,
     pc_port = None,
     ):
@@ -149,8 +150,8 @@ def collect_and_split_dataset(
                 break
 
             frame_bgr = crop_and_resize(frame_bgr, 
-                            x0=126, y0=0,
-                            x1=421, y1=image_size,
+                            x0=crop_size[0], y0=0,
+                            x1=crop_size[1], y1=image_size,
                             size=None)
 
             current_time = time.time()

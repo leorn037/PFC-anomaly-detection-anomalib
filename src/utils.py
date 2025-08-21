@@ -23,6 +23,7 @@ CONFIG = {
     "collect" : True, # Coleta de Imagens pela Rasp para treinamento
     "time_sample" : 0.2,
     "img_n" : 100,
+    "crop_x" : (126, 421),
 
     # Recebimento do modelo pela rasp
     "receive_model" : False, # Envio do PC / Recebimento pela Rasp do modelo
@@ -44,7 +45,7 @@ CONFIG = {
     
     "export_type": "onnx",
 
-    "operation" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "mode" : 'Train', # Operação com modelo ('Inference','Train','Continue')
     "on_pc_inference" : True, # Executa inferência no PC com imagens da Raspberry
 
     # Visualização
@@ -82,8 +83,10 @@ def anomaly_args(config, mode="rasp"):
 
     pc_args = [
         ("pi_ip", str, "IP da Raspberry Pi"),
+        ("collect", bool, "Habilita a coleta de imagens (True/False)"),
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("model_name", str, "Nome do modelo para ser treinado"),
+        ("mode", str, "Escolhe o modo de operação da detecção ('Train', 'Inference')"),
         ("on_pc_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
     ]
 
@@ -102,7 +105,6 @@ def anomaly_args(config, mode="rasp"):
 
         if arg_type == bool:
             parser.add_argument(
-                f"-{key[0]}",
                 f"--{key}", 
                 type=str_to_bool, 
                 default=config[key], 
@@ -111,7 +113,7 @@ def anomaly_args(config, mode="rasp"):
 
         else:
             parser.add_argument(
-                f"-{key[0]}",
+                f"-{key}",
                 f"--{key}", 
                 type=arg_type, 
                 default=config[key], 
@@ -146,7 +148,7 @@ def print_config_summary(config: dict, mode: str = "rasp"):
             "receive_model", "on_pc_inference", "websocket"
             ]
     else: 
-        keys_to_show = [ "pi_ip", "img_n", "model_name", "on_pc_inference" ]
+        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "mode", "on_pc_inference" ]
 
     # 2. Crie uma string de separação para o cabeçalho
     separator = f"{Colors.CYAN}{'-'*40}{Colors.RESET}"

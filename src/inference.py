@@ -314,7 +314,7 @@ def live_inference_rasp(model, config, camera):
             cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
-def serve_inference_to_pi(model, config):
+def serve_inference_to_pi(model, config, threshold=0.9):
     """
     Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
 
@@ -328,10 +328,22 @@ def serve_inference_to_pi(model, config):
     import cv2
     import socket
     import pickle
+    from datetime import datetime
+    from pathlib import Path
+    import os
 
     pc_ip = '0.0.0.0'
     pc_port = config["receive_port"]
     image_size = config["image_size"]
+
+    # --- Lógica de criação de diretório de inferência ---
+    # 1. Obtém a data e hora atuais
+    current_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    # 2. Cria o caminho para a nova pasta de inferência
+    inference_dir = Path("inference_results") / f"inference_{current_timestamp}"
+    # 3. Cria o diretório (se ele não existir)
+    os.makedirs(inference_dir, exist_ok=True)
+    print(f"[{Colors.GREEN}Diretório de Salvamento{Colors.RESET}] Criando pasta para resultados de inferência: {inference_dir}")
 
     # Pré-processamento: as mesmas transformações usadas no treinamento
     transform_for_model = v2.Compose([
@@ -351,6 +363,8 @@ def serve_inference_to_pi(model, config):
         with conn:
             print(f"{Colors.GREEN}Conexão aceita de {addr}. Iniciando inferência...{Colors.RESET}")
             
+            inference_count = 0
+
             # Loop principal de inferência
             while True:
                 try:
@@ -378,21 +392,28 @@ def serve_inference_to_pi(model, config):
                     _, anomaly_map, pred_score, pred_mask = predict_image(model, original_img_pil, transform_for_model, image_size)
                     
                     # 5. Obtém a flag de anomalia
-                    is_anomaly = check_for_anomaly_by_score(pred_score, 0.5)
+                    is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
 
                     # 6. Envia a flag de volta para a Raspberry Pi
                     response_flag = b'\x01' if is_anomaly else b'\x00'
                     conn.sendall(response_flag)
 
                     # Pós-processamento para visualização com OpenCV:
-
                     anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
                     anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
-                                                    (decoded_image.shape[1], decoded_image.shape[0]), # (largura, altura)
+                                                    (decoded_image.shape[1], decoded_image.shape[0]),
                                                     interpolation=cv2.INTER_LINEAR)
             
                     # Aplica um mapa de cores (heatmap) para melhor visualização
                     anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
+
+                    # Salva as imagens
+                    timestamp = int(time.time() * 1000)
+                    cv2.imwrite(str(inference_dir / f"original_{inference_count:04d}_{timestamp}.jpg"), decoded_image)
+                    cv2.imwrite(str(inference_dir / f"anomaly_map_{inference_count:04d}_{timestamp}.jpg"), anomaly_map_colored)
+                    print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
+
+                    inference_count += 1
 
                     # Adiciona o score na imagem original para display
                     cv2.putText(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), 

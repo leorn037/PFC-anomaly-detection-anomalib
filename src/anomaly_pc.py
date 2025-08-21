@@ -30,9 +30,10 @@ def main():
     model = create_model(config)
     if model is None: return
 
-    print(f"{Colors.BLUE}Iniciando treinamento do modelo...{Colors.RESET}")
-    engine, training_time = train_model(model, datamodule, config)
-    print(f"{Colors.BLUE}Treinamento concluído em {training_time:.2f} segundos.{Colors.RESET}")
+    if config["mode"]=='Train':
+        print(f"{Colors.BLUE}Iniciando treinamento do modelo...{Colors.RESET}")
+        engine, training_time = train_model(model, datamodule, config)
+        print(f"{Colors.BLUE}Treinamento concluído em {training_time:.2f} segundos.{Colors.RESET}")
 
     # --- 5. Avaliação com métricas (no conjunto de teste preparado) ---
     if config["evaluate"]: 
@@ -60,7 +61,7 @@ def main():
     print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 
     if config["live"]:
-            if config["on_pc_inference"]: serve_inference_to_pi(model, config)
+            if config["on_pc_inference"]: serve_inference_to_pi(model, config,threshold=0.9)
             elif config["websocket"]: receive_and_process_data()
             else: live_inference_opencv(model, config["image_size"])
     else:

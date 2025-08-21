@@ -17,7 +17,7 @@ MODEL_CONFIGS = {
         "params": {
             "backbone": "resnet10t", 
             "layers": ("layer2", "layer3"), # ["blocks.2", "blocks.4"]
-            "coreset_sampling_ratio": 0.1,
+            "coreset_sampling_ratio": 0.01,
             "num_neighbors": 9
         },
         "inference_params": {
@@ -33,8 +33,7 @@ MODEL_CONFIGS = {
             "pre_trained": True,
         },
         "inference_params": {
-            # Padim não precisa de `load_from_checkpoint`
-            # Ele treina e faz a inferência ao mesmo tempo
+            "pre_trained": False
         }
     },
     "DFM": {
@@ -45,6 +44,7 @@ MODEL_CONFIGS = {
             "pre_trained": True
         },
         "inference_params": {
+            "pre_trained": False
 
         },
     },
@@ -138,7 +138,7 @@ def create_model(config):
     from anomalib.pre_processing import PreProcessor
     model_name = config.get("model_name")
     ckp_path = config.get("ckpt_path")
-    operation = config.get("operation")
+    mode = config.get("mode")
 
     image_size = config["image_size"]
     transform= v2.Compose([
@@ -159,14 +159,19 @@ def create_model(config):
     model = None
     
     # 2. Lógica para Treinamento ou Inferência (unificada)
-    if operation != 'Inference':
+    if mode != 'Inference':
         # Cria um novo modelo para treinamento
         model = ModelClass(pre_processor=pre_processor, **model_params)
         print(f"{Colors.GREEN}Modelo de treinamento '{model_name}' criado com sucesso.{Colors.RESET}")
         
-    elif ckp_path and Path(ckp_path).exists():
-        # Carrega um modelo existente para inferência
-        print(f"{Colors.CYAN}Carregando o MELHOR modelo de {model_name} para inferência de: {ckp_path}{Colors.RESET}")
+    else:
+        if not (ckp_path and Path(ckp_path).exists()):
+            results_path = Path("results") / config["model_name"] / config["folder_name"]
+            ckp_path = get_latest_checkpoint(results_path)
+            print(f"{Colors.CYAN}Carregando o ÚLTIMO modelo de {model_name} para inferência de: {ckp_path}{Colors.RESET}")
+        else:
+            # Carrega um modelo existente para inferência
+            print(f"{Colors.CYAN}Carregando o MELHOR modelo de {model_name} para inferência de: {ckp_path}{Colors.RESET}")
         start_time = time.time()
         
         # Junta os parâmetros de treinamento com os de inferência
@@ -186,9 +191,6 @@ def create_model(config):
         end_time = time.time()
         load_time = end_time - start_time
         print(f"{Colors.GREEN} Modelo carregado em {load_time:.2f} segundos.{Colors.RESET}")
-    else:
-        print(f"{Colors.RED}{Colors.BOLD}AVISO: Checkpoint '{ckp_path}' não encontrado para inferência. Não será possível realizar a inferência. Verifique o caminho.{Colors.RESET}")
-        return None
     
     return model
 
@@ -200,8 +202,8 @@ def train_model(model, datamodule, config): # Encapsula a lógica de treinamento
     engine = Engine(logger=False,accelerator="auto", max_epochs=50)
     #trainer = Trainer(devices=4, accelerator="gpu", strategy="ddp")
 
-    if config["operation"] == "New": ckpt_path = None
-    elif config["operation"] == "Continue": ckpt_path = config["ckpt_path"]
+    if config["mode"] == "New": ckpt_path = None
+    elif config["mode"] == "Continue": ckpt_path = config["ckpt_path"]
     else: ckpt_path=None
     
     engine.fit(model=model,

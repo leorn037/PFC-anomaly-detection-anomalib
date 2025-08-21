@@ -33,57 +33,6 @@ def crop_and_resize(image, x0: int, y0: int, x1: int, y1: int, size: int | None)
         return resized_image
     else:
         return cropped_image
-    
-def sender_thread_func(stop_event, image_queue, pc_ip, pc_port):
-    """Função que será executada em uma thread para enviar imagens."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(120.0)
-            try:
-                print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Conectando ao PC em {pc_ip}:{pc_port}...")
-                sock.connect((pc_ip, pc_port))
-                print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Conexão estabelecida.")
-                
-                while not stop_event.is_set():
-                    try:
-                        # Tenta pegar uma imagem da fila com um timeout
-                        frame = image_queue.get(timeout=0.1)
-                        
-
-                        # Codifica o frame em formato JPEG para compressão
-                        _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-
-                        # Serializa os dados e calcula o tamanho
-                        data = pickle.dumps(encoded_image)
-                        message_size = struct.pack("!I", len(data))
-
-                        # Envia o tamanho da mensagem e os dados
-                        sock.sendall(message_size + data)
-                        print(f"[{Colors.CYAN}Thread de Envio{Colors.RESET}] Imagem enviada. Tamanho: {len(data)} bytes.")
-
-                        # Tenta receber flag de status (não bloqueante)
-                        sock.settimeout(0.01)
-                        try:
-                            msg = sock.recv(16).decode().strip()
-                            if msg:
-                                print(f"{Colors.YELLOW}Flag recebida do PC: {msg}{Colors.RESET}")
-                                # Aqui você pode acender LED, mudar estado, etc.
-                        except socket.timeout:
-                            pass
-
-
-                    except queue.Empty: # Se a fila estiver vazia, apenas continua o loop e verifica o stop_event
-                        continue
-                    except (ConnectionError, BrokenPipeError) as e:
-                        print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro de conexão: {e}. Encerrando thread...")
-                        break
-            except (socket.timeout, ConnectionRefusedError):
-                print(f"{Colors.RED}Não foi possível conectar ao cliente, enviando imagens desativado.{Colors.RESET}")
-                return
-    except ConnectionRefusedError:
-        print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro: O PC {pc_ip} recusou a conexão. Verifique se o servidor está rodando.")
-    except Exception as e:
-        print(f"[{Colors.RED}Thread de Envio{Colors.RESET}] Erro inesperado: {e}")
 
 # Função para receber todas as imagens e salvar
 def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
@@ -137,8 +86,8 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
 
                     if decoded_image is None:
                         continue
-
-                    # Exibe a imagem
+                    
+                                        # Exibe a imagem
                     cv2.imshow("Recepção de Imagens", decoded_image)
 
                     key = cv2.waitKey(1) & 0xFF
@@ -150,7 +99,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
                     elif key == ord('q'):
                         print(f"{Colors.YELLOW}Saindo...{Colors.RESET}")
                         break
-                    
+
                     # Lógica de salvamento, agora controlada pela flag `saving`
                     if saving and img_count < num_images:
                         filename = save_path / f"img_{img_count:04d}.jpg"
@@ -162,6 +111,16 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
                             print(f"{Colors.YELLOW}Coleta finalizada ({num_images} imagens salvas){Colors.RESET}")
                             saving = False  # Para de salvar
                             break
+                
+                except socket.timeout:
+                    continue
+                except (ConnectionResetError, BrokenPipeError):
+                    print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
+                    break
+                except Exception as e:
+                    print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+                    break
+
                 except (ConnectionResetError, BrokenPipeError):
                     print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
                     break
@@ -348,8 +307,8 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                 # 1. Captura o frame da câmera
                 frame = picam2.capture_array()
                 frame = crop_and_resize(frame, 
-                                        x0=126, y0=0, 
-                                        x1=421, y1=config["image_size"], 
+                                        x0=config["crop_x"][0], y0=0, 
+                                        x1=config["crop_x"][1], y1=config["image_size"], 
                                         size=None)
 
                 
