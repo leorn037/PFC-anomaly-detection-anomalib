@@ -33,7 +33,7 @@ CONFIG = {
     "image_size": 640, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 8,
     "folder_name": 'Test',
-    "normal_dir": "img_256/normal", # Imagens normais para treinamento
+    "normal_dir": "img_640/normal", # Imagens normais para treinamento
     "abnormal_test_dir": "img_640/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "img_640/test", # Imagens normais para teste
 

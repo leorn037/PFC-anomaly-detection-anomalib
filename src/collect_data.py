@@ -141,7 +141,7 @@ def collect_and_split_dataset(
         while True:
             # Captura a imagem da câmera
             frame_bgr = get_frame(camera,image_size)
-            crop_and_resize(frame_bgr,x0=126,y0=0,x1=421,y1=image_size,size=None)
+            frame_bgr = crop_and_resize(frame_bgr,x0=126,y0=0,x1=421,y1=image_size,size=None)
 
             if frame_bgr is None:
                 print("Erro: Não foi possível ler o frame.")
