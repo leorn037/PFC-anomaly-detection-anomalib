@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from utils import Colors
-
+from network import crop_and_resize
 import queue
 
 try:
@@ -26,6 +26,18 @@ try:
 
         # Opcional: Desabilitar o controle automático de exposição e ganho para consistência de imagens
         # picam2.set_controls({"AeEnable": False, "AwbEnable": False})
+
+        # Define o modo de foco para manual com um valor específico
+        # picam2.set_controls({"AfMode": picam2.controls.AfModeEnum.Manual, "LensPosition": 2.0})
+
+        # A posição da lente é um valor numérico. O valor '0' é o infinito.
+        # Valores maiores movem a lente para mais perto.
+
+        #focus_distance_10cm = 10.0 # Valor de foco em dioptrias (1/m)
+        #lens_position = 1000.0 / focus_distance_10cm # Converte para o valor de controle
+        
+        #print(f"Definindo foco manual para {focus_distance_10cm} cm...")
+        #picam2.set_controls({"LensPosition": lens_position})
 
         return picam2
 
@@ -129,6 +141,7 @@ def collect_and_split_dataset(
         while True:
             # Captura a imagem da câmera
             frame_bgr = get_frame(camera,image_size)
+            crop_and_resize(frame_bgr,x0=126,y0=0,x1=421,y1=image_size,size=None)
 
             if frame_bgr is None:
                 print("Erro: Não foi possível ler o frame.")
@@ -201,6 +214,6 @@ if __name__ == "__main__":
         output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
         time_sample=0.1,                       # Salvar um frame normal automaticamente a cada 0.5 segundos
         total_frames_to_collect=100,             # Parar a coleta automática de normais após 200 frames
-        image_size=256,
-        camera = setup_camera(256)
+        image_size=640,
+        camera = setup_camera(640)
     )

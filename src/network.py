@@ -8,7 +8,6 @@ from utils import Colors
 import queue
 import time
 
-
 def crop_and_resize(image, x0: int, y0: int, x1: int, y1: int, size: int | None):
     """
     Corta e redimensiona uma imagem.
@@ -34,7 +33,7 @@ def crop_and_resize(image, x0: int, y0: int, x1: int, y1: int, size: int | None)
         return resized_image
     else:
         return cropped_image
-
+    
 # frame = crop_and_resize(frame, x0=0, y0=0, x1=256, x2=256, size=None)
 def sender_thread_func(stop_event, image_queue, pc_ip, pc_port):
     """Função que será executada em uma thread para enviar imagens."""
@@ -295,6 +294,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
             while True:
                 # 1. Captura o frame da câmera
                 frame = picam2.capture_array()
+                crop_and_resize(frame,x0=126,y0=0,x1=421,y1=config["image_size"],size=None)
 
                 
                 # 2. Codifica e serializa o frame
