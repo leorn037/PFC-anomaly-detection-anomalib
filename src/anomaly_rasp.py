@@ -1,15 +1,26 @@
 from utils import Colors, CONFIG as config, anomaly_args, print_config_summary
 anomaly_args(config,"rasp")
 print_config_summary(config, "rasp")
-from pathlib import Path
-import matplotlib.pyplot as plt
 import time
 init_time = time.time()
+from pathlib import Path
+import matplotlib.pyplot as plt
+import serial
 
 from collect_data import collect_and_split_dataset, setup_camera
 from network import receive_model_from_pc, live_inference_rasp_to_pc, rasp_wait_flag
 from inference import live_inference_rasp, visualize_imgs
 
+SERIAL_PORT = '/dev/ttyS0' 
+BAUD_RATE = 9600 # Taxa de comunicação (deve ser a mesma na ESP)
+
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+    print(f"[{Colors.GREEN}Serial{Colors.RESET}] Porta serial {SERIAL_PORT} aberta com sucesso.")
+except serial.SerialException as e:
+    print(f"[{Colors.RED}Serial{Colors.RESET}] Erro ao abrir a porta serial: {e}")
+    # Se a porta serial não puder ser aberta, o código pode continuar sem o envio de sinal.
+    ser = None
 
 
 def main():
@@ -19,15 +30,14 @@ def main():
         rasp_wait_flag(config)
 
     # 1. Prepare dataset:
-    cam_img_size = 256
-    camera = setup_camera(cam_img_size)
+    camera = setup_camera(config["collect_img_size"])
     if config["collect"]: # Novo dataset
         collect_and_split_dataset(
             camera,
             output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
             time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
             total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
-            image_size=cam_img_size,
+            image_size=config["collect_img_size"],
             crop_size=config["crop_x"],
             pc_ip=config["pc_ip"],
             pc_port=config["receive_port"]
@@ -63,7 +73,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            if config["on_pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120)
+            if config["on_pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120, ser = ser)
             else: live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"

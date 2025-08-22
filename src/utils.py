@@ -23,6 +23,7 @@ CONFIG = {
     "collect" : True, # Coleta de Imagens pela Rasp para treinamento
     "time_sample" : 0.2,
     "img_n" : 100,
+    "collect_img_size": 640,
     "crop_x" : (180, 470),
 
     # Recebimento do modelo pela rasp
@@ -30,16 +31,16 @@ CONFIG = {
     "model_output_dir" : "models/received",
 
     # Dataset configs
-    "dataset_root": 'C:/Users/Leonardo/Downloads/Programas/PFC/src/img_256',
+    "dataset_root": './data',
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Test',
-    "normal_dir": "img_640/normal", # Imagens normais para treinamento
-    "abnormal_test_dir": "img_640/abnormal", # Imagens anômalas para teste
-    "normal_test_dir": "img_640/test", # Imagens normais para teste
+    "normal_dir": "data/normal", # Imagens normais para treinamento
+    "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
+    "normal_test_dir": "data/test", # Imagens normais para teste
 
     # Model configs
-    "model_name": 'Padim',
+    "model_name": 'PatchCore',
     "ckpt_path": None,
     "evaluate": False, 
     

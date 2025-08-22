@@ -278,7 +278,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 "ckpt_path": str(file_path)
             }
 
-def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
+def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
     """
     Captura frames, envia para um PC para inferência e recebe o resultado.
 
@@ -305,7 +305,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                 frame = picam2.capture_array()
                 frame = crop_and_resize(frame, 
                                         x0=config["crop_x"][0], y0=0, 
-                                        x1=config["crop_x"][1], y1=config["image_size"], 
+                                        x1=config["crop_x"][1], y1=config["collect_img_size"], 
                                         size=None)
 
                 
@@ -331,6 +331,15 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                     
                     status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
                     
+                    # --- Lógica de controle do sinal digital via serial ---
+                    if ser: # Só envia se a porta serial estiver aberta
+                        if status:
+                            ser.write(b'H') # Envia um byte 'H' (para HIGH)
+                            print(f"[{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}] Sinal 'H' enviado via serial.")
+                        else:
+                            ser.write(b'L') # Envia um byte 'L' (para LOW)
+                            print(f"[{Colors.GREEN}NORMAL{Colors.RESET}] Sinal 'L' enviado via serial.")
+
                     print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
                 
                 except socket.timeout:
@@ -340,6 +349,12 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120):
                 except Exception as e:
                     print(f"{Colors.RED}Erro durante a comunicação: {e}. Encerrando...{Colors.RESET}")
                     break
+
+                finally:
+                    # Garante que a porta serial seja fechada ao sair
+                    if ser:
+                        ser.close()
+                        print(f"[{Colors.CYAN}Serial{Colors.RESET}] Porta serial fechada.")
     
     except ConnectionRefusedError:
         print(f"{Colors.RED}Erro: Conexão recusada. O servidor no PC {pc_ip} não está online ou a porta {pc_port}está incorreta.{Colors.RESET}")

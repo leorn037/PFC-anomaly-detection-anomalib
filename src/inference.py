@@ -410,7 +410,7 @@ def serve_inference_to_pi(model, config, threshold=0.9):
                     # Salva as imagens
                     timestamp = int(time.time() * 1000)
                     cv2.imwrite(str(inference_dir / f"original_{inference_count:04d}_{timestamp}.jpg"), decoded_image)
-                    cv2.imwrite(str(inference_dir / f"anomaly_map_{inference_count:04d}_{timestamp}.jpg"), anomaly_map_colored)
+                    cv2.imwrite(str(inference_dir / f"anomaly_map_{inference_count:04d}_{timestamp}_{pred_score:.4f}.jpg"), anomaly_map_colored)
                     print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
 
                     inference_count += 1
