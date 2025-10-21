@@ -5,23 +5,10 @@ import time
 init_time = time.time()
 from pathlib import Path
 import matplotlib.pyplot as plt
-import serial
 
 from collect_data import collect_and_split_dataset, setup_camera
 from network import receive_model_from_pc, live_inference_rasp_to_pc, rasp_wait_flag
 from inference import live_inference_rasp, visualize_imgs
-
-SERIAL_PORT = '/dev/ttyS0' 
-BAUD_RATE = 9600 # Taxa de comunicação (deve ser a mesma na ESP)
-
-try:
-    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    print(f"[{Colors.GREEN}Serial{Colors.RESET}] Porta serial {SERIAL_PORT} aberta com sucesso.")
-except serial.SerialException as e:
-    print(f"[{Colors.RED}Serial{Colors.RESET}] Erro ao abrir a porta serial: {e}")
-    # Se a porta serial não puder ser aberta, o código pode continuar sem o envio de sinal.
-    ser = None
-
 
 def main():
     

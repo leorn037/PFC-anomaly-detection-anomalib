@@ -332,6 +332,11 @@ def serve_inference_to_pi(model, config, threshold=0.9):
     from pathlib import Path
     import os
 
+    # --- Configuração de Consenso ---
+    CONSECUTIVE_ANOMALY_LIMIT = 5 # <--- NOVO: Limite de flags seguidas
+    anomaly_streak = 0            # <--- NOVO: Contador de flags consecutivas
+    is_anomaly_confirmed = False  # <--- NOVO: Flag para o sinal a ser enviado para a Pi
+    
     pc_ip = '0.0.0.0'
     pc_port = config["receive_port"]
     image_size = config["image_size"]
@@ -394,8 +399,17 @@ def serve_inference_to_pi(model, config, threshold=0.9):
                     # 5. Obtém a flag de anomalia
                     is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
 
+                    # --- Lógica de Consenso (A Nova Lógica) ---
+                    if is_anomaly:
+                        anomaly_streak += 1
+                        if anomaly_streak >= CONSECUTIVE_ANOMALY_LIMIT:
+                            is_anomaly_confirmed = True # Confirma que a anomalia é persistente
+                    else:
+                        anomaly_streak = 0 # Reseta a contagem se for um frame normal
+                        is_anomaly_confirmed = False # Garante que a flag seja desligada imediatamente se o score cair
+
                     # 6. Envia a flag de volta para a Raspberry Pi
-                    response_flag = b'\x01' if is_anomaly else b'\x00'
+                    response_flag = b'\x01' if is_anomaly_confirmed else b'\x00'
                     conn.sendall(response_flag)
 
                     # Pós-processamento para visualização com OpenCV:

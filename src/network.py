@@ -5,7 +5,6 @@ import pickle
 import cv2
 from pathlib import Path
 from utils import Colors
-import queue
 import time
 
 def crop_and_resize(image, x0: int, y0: int, x1: int, y1: int, size: int | None):
@@ -289,8 +288,26 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
         image_size (int): Tamanho da imagem para captura.
         timeout (int): Tempo máximo em segundos para esperar pela resposta do PC.
     """
+    from gpiozero import OutputDevice # Usamos OutputDevice para um pino digital
+    import atexit # Usado para garantir que o pino seja desligado ao sair
+
+    ANOMALY_SIGNAL_PIN = 17 
+    try:
+        anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=False, initial_value=False)
+
+        # Função para garantir que o pino seja desligado ao final do script
+        def cleanup_gpio():
+            anomaly_output.off()
+            print(f"[{Colors.CYAN}GPIO{Colors.RESET}] Sinal LOW garantido no pino {ANOMALY_SIGNAL_PIN} ao finalizar.")
+        atexit.register(cleanup_gpio)
+
+    except Exception as e:
+        print(f"[{Colors.RED}GPIO ERROR{Colors.RESET}] Não foi possível configurar o GPIO {ANOMALY_SIGNAL_PIN}: {e}")
+        anomaly_output = None # Se falhar, define como None
+
     pc_ip = config["pc_ip"]
     pc_port = config["receive_port"]
+
     print(f"{Colors.GREEN}Conectando ao servidor no PC ({pc_ip}:{pc_port})...{Colors.RESET}")
     
     try:
@@ -331,14 +348,16 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
                     
                     status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
                     
-                    # --- Lógica de controle do sinal digital via serial ---
-                    if ser: # Só envia se a porta serial estiver aberta
-                        if status:
-                            ser.write(b'H') # Envia um byte 'H' (para HIGH)
-                            print(f"[{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}] Sinal 'H' enviado via serial.")
-                        else:
-                            ser.write(b'L') # Envia um byte 'L' (para LOW)
-                            print(f"[{Colors.GREEN}NORMAL{Colors.RESET}] Sinal 'L' enviado via serial.")
+                    if anomaly_output is None:
+                        # Se a inicialização falhou (por exemplo, falta de permissão ou pino inválido), apenas imprime
+                        print(f"[{Colors.YELLOW}GPIO{Colors.RESET}] Aviso: Sinal não enviado (Inicialização do pino falhou).")
+                    elif is_anomaly:
+                        anomaly_output.on() # Define o pino para HIGH (3.3V)
+                        print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino {ANOMALY_SIGNAL_PIN}.")
+                    else:
+                        anomaly_output.off() # Define o pino para LOW (0V)
+                        print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino {ANOMALY_SIGNAL_PIN}.")
+
 
                     print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
                 
@@ -365,6 +384,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
     finally:
         picam2.stop()
         print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")
+
 
 def rasp_wait_flag(config):
     host = '0.0.0.0'
