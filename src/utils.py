@@ -35,14 +35,14 @@ CONFIG = {
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Test',
-    "normal_dir": "../img_nor",#"data/normal", # Imagens normais para treinamento
+    "normal_dir": "img_nor",#"data/normal", # Imagens normais para treinamento
     "abnormal_test_dir": "img_abn", #"data/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "img_test", #"data/test", # Imagens normais para teste
 
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
-    "evaluate": False, 
+    "evaluate": True, 
     
     "export_type": "onnx",
 

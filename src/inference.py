@@ -398,6 +398,7 @@ def serve_inference_to_pi(model, config, threshold=0.9):
                     
                     # 5. Obtém a flag de anomalia
                     is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
+                    # is_anomaly = check_for_anomaly_by_area(pred_mask, 100, threshold)
 
                     # --- Lógica de Consenso (A Nova Lógica) ---
                     if is_anomaly:

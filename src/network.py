@@ -86,7 +86,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
                     if decoded_image is None:
                         continue
                     
-                                        # Exibe a imagem
+                    # Exibe a imagem
                     cv2.imshow("Recepção de Imagens", decoded_image)
 
                     key = cv2.waitKey(1) & 0xFF
@@ -385,26 +385,75 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
         picam2.stop()
         print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")
 
-
-def rasp_wait_flag(config):
+def rasp_wait_flag(config, expected_command="S"):
+    """
+    Aguarda a conexão do PC e recebe um comando específico. 
+    Se a conexão falhar ou o comando for incorreto, tenta novamente (retry).
+    """
     host = '0.0.0.0'
     port = config["receive_port"]
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.bind((host, port))
-        server.listen(1)
-        print(f"Aguardando flag em {host}:{port}...")
-        conn, addr = server.accept()
-        with conn:
-            data = conn.recv(1024)
-            if data == b"OK":
-                print("Flag recebida, continuando...")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.bind((host, port))
+            server.listen(1)
+            print(f"Aguardando '{expected_command}' do PC em {host}:{port}...")
+            conn, addr = server.accept()
+            with conn:
+                # Recebe o comando
+                command_bytes = conn.recv(4)
+                if not command_bytes:
+                    raise ConnectionResetError("Conexão fechada pelo PC.")
+                
+                command = command_bytes.decode().strip()
 
-def send_flag(config):
+                if command == expected_command:
+                    conn.sendall(b'ACK') # Envia confirmação (ACK)
+                    print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando '{expected_command}' recebido e confirmado.")
+                    return True
+                else:
+                    conn.sendall(b'NACK') # Envia NACK para comando errado
+                    print(f"[{Colors.RED}SYNC{Colors.RESET}] Comando inesperado recebido: {command}. Tentando novamente...")
+                    return False # Retorna Falso para o código principal tentar de novo
+        return False
+    except (ConnectionResetError, ConnectionRefusedError) as e:
+        print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro de conexão ({e}). Tentando novamente...")
+        return False
+    except Exception as e:
+        print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro: {e}")
+        return False
+
+def send_flag(config, command="S"):
+    """
+    Envia um comando de flag para a Pi e espera pela confirmação (ACK).
+    
+    Isso é usado para sincronizar as fases de treinamento/inferência.
+    """
     pi_ip = config["pi_ip"]
     port = config["receive_port"]
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect((pi_ip, port))
-        sock.sendall(b"OK")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # Conecta à Pi (que está no modo listen temporário)
+            sock.connect((pi_ip, port))
+            
+            # Envia o comando
+            print(f"[{Colors.CYAN}SYNC{Colors.RESET}] Enviando '{command}' para Pi em {pi_ip}:{port} ...")
+            sock.sendall(command.encode('utf-8'))
+            
+            # Espera a resposta ACK
+            response = sock.recv(16).decode().strip()
+            
+            if response == "ACK":
+                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
+                return True
+            else:
+                print(f"[{Colors.YELLOW}SYNC{Colors.RESET}] Resposta inválida da Pi: {response}. ")
+
+    except (ConnectionRefusedError, socket.timeout) as e:
+        print(f"[{Colors.RED}SYNC{Colors.RESET}] Falha na conexão ou timeout: {e}")
+    except Exception as e:
+        print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro inesperado no envio: {e}")        
+    
+    return False
 
 def receive_and_process_data():
     """

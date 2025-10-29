@@ -14,7 +14,8 @@ def main():
     
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     if config["collect"] and (config["on_pc_inference"] or config["receive_model"]): 
-        rasp_wait_flag(config)
+        while not rasp_wait_flag(config, expected_command="S"): 
+            time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
 
     # 1. Prepare dataset:
     camera = setup_camera(config["collect_img_size"])
@@ -32,8 +33,9 @@ def main():
     else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}"
 
     if config["on_pc_inference"]:
-         print(f"{Colors.CYAN}Esperando confirmação de treinamento...{Colors.RESET}")
-         rasp_wait_flag(config)
+        print(f"{Colors.CYAN}Esperando confirmação de treinamento...{Colors.RESET}")
+        while not rasp_wait_flag(config, expected_command="M"): 
+            time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
     elif config["receive_model"]:
         start_time = time.time()
         from models import MODEL_CONFIGS, create_model

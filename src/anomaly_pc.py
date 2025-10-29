@@ -3,7 +3,10 @@ from utils import Colors, CONFIG as config, anomaly_args, print_config_summary
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     if config["collect"] and (config["on_pc_inference"] or config["receive_model"]): 
-        send_flag(config)
+        # Espera que o PC se conecte à Pi e envie a flag de início de coleta
+        while not send_flag(config, command="S"):
+            print(f"{Colors.YELLOW}Aguardando Pi... Nova tentativa de sincronização em 3s.{Colors.RESET}")
+            time.sleep(3)
     # --- Passo 1: Receber todas as imagens da Raspberry Pi ---
     
     receive_path = Path(config["normal_dir"])
@@ -37,15 +40,14 @@ def main():
 
     if not config["receive_model"] and config["live"]:
         send_flag(config)
+        while not send_flag(config, command="MODEL_TRAINED"):
+            print(f"{Colors.YELLOW}Falha ao enviar confirmação de modelo treinado. Reintentando em 3s...{Colors.RESET}")
+            time.sleep(3)
     elif model_path and config["live"]:
         send_model_to_pi(model_path,config, MODEL_CONFIGS)
     else:
         print(f"{Colors.RED}Erro: Não foi possível encontrar o modelo treinado para enviar.{Colors.RESET}")
     
-    #engine, training_time = train_model(model, datamodule, config)
-    #engine = Engine(logger=False,accelerator="auto")
-    #export_model(engine, model, config)
-
     # --- 6. Verificação e visualização da detecção individual por código ---
     print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 

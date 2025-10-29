@@ -1,6 +1,6 @@
 
 
-from anomalib.models import Patchcore, ReverseDistillation, Padim, Dfm, Stfpm, Dfkde, EfficientAd, Fre
+from anomalib.models import Patchcore, Padim, Dfm, Stfpm, Dfkde
 
 import torchvision.transforms.v2 as v2 # Importar transforms para pré-processar imagens
 # import matplotlib.pyplot as plt
@@ -15,8 +15,8 @@ MODEL_CONFIGS = {
     "PatchCore": {
         "class": Patchcore,
         "params": {
-            "backbone": "resnet18", 
-            "layers": ("layer2", "layer3"), # ["blocks.2", "blocks.4"]
+            "backbone": "wide_resnet50_2", # "resnet18"
+            "layers": ("layer2", "layer3"),
             "coreset_sampling_ratio": 0.1,
             "num_neighbors": 9
         },
@@ -27,7 +27,7 @@ MODEL_CONFIGS = {
     "Padim": {
         "class": Padim,
         "params": {
-            "backbone": 'resnet18',
+            "backbone": 'resnet18', # "resnet18"
             "layers": ["layer1", "layer2", "layer3"], # ,
             #"n_features": 100, #resnet18=100
             "pre_trained": True,
@@ -70,44 +70,13 @@ MODEL_CONFIGS = {
 
         }
     },
-    # ----
-    "ReverseDistillation": {
-        "class": ReverseDistillation,
-        "params": {
-            "backbone": "resnet18",
-            "layers": ["layer1", "layer2", "layer3"]
-        },
-        "inference_params": {
-            # Não é necessário 'pre_trained' aqui, pois é um parâmetro
-            # opcional para esta classe e o `load_from_checkpoint` cuida disso
-        }
-    },
 
-    "EfficientAd": {
-        "class": EfficientAd,
-        "params":{},
-        "inference_params": {
-
-        }
-    },
-    "FRE": {
-        "class": Fre,
-        "params": {
-            "backbone": "resnet18",
-            "layer": "layer3",
-            "pooling_kernel_size": 2,
-            "input_dim": 16384,#65536,
-            "pre_trained": True
-
-        }
-        #pooling_kernel_size=2, input_dim=65536, latent_dim=220
-    }
 }
 
 def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração e retorna o Folder
     
     from anomalib.data import Folder
-    from anomalib.data.utils import TestSplitMode
+    from anomalib.data.utils import TestSplitMode, ValSplitMode
     image_size = config["image_size"] # Defina o tamanho da imagem para redimensionamento
 
     transform= v2.Compose([
@@ -120,12 +89,14 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
         root=None,
         normal_dir=config["normal_dir"],  # Imagens normais para treinamento
         test_split_mode=TestSplitMode.SYNTHETIC, # The Folder datamodule will create training, validation, test and prediction datasets and dataloaders for us.
+        val_split_mode=ValSplitMode.SYNTHETIC,
         #abnormal_dir=config["abnormal_test_dir"], # Imagens anômalas para teste
         #normal_test_dir=config["normal_test_dir"], # Imagens normais para teste
         num_workers=4,
         train_batch_size=config["batch_size"],
         augmentations=transform
     )
+
     datamodule.setup() # Carrega os datasets
 
     return datamodule
