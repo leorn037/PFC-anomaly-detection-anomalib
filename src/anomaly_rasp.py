@@ -14,7 +14,14 @@ def main():
     
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     if config["collect"] and (config["network_inference"] or config["receive_model"]): 
-        while not rasp_wait_flag(config, expected_command="S"): 
+        while True:
+            cmd = rasp_wait_flag(config, expected_command="S")
+            if cmd == "S":
+                break 
+            elif cmd == "M":
+                config["collect"] = False
+                print(f'{Colors.YELLOW}PC esperando treinamento. Ignorando coleta de imagens.{Colors.RESET}')
+                break       # Sai do laço para iniciar próximo bloco
             time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
 
     # 1. Prepare dataset:
@@ -29,12 +36,17 @@ def main():
             pc_ip=config["pc_ip"],
             pc_port=config["receive_port"]
         )
-    else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada. Usando imagens na pasta '{config["normal_dir"]}'{Colors.RESET}"
+    else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada.'{Colors.RESET}"
 
     if config["network_inference"]:
         print(f"{Colors.CYAN}Esperando confirmação de treinamento...{Colors.RESET}")
-        while not rasp_wait_flag(config, expected_command="M"): 
+        while True:
+            cmd = rasp_wait_flag(config, expected_command="M")
+            if cmd == "M":
+                break 
+            elif cmd == "S": return 'restart'
             time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
+
     elif config["receive_model"]:
         start_time = time.time()
         from models import MODEL_CONFIGS, create_model
@@ -96,4 +108,7 @@ if __name__ == "__main__":
     # Para timm (PyTorch Image Models)
     os.environ["TIMM_IGNORE_DEPRECATED_WARNINGS"] = "1"
 
-    main()
+    ret = main()
+    while ret == 'restart':
+        ret = main() 
+

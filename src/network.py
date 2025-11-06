@@ -477,7 +477,7 @@ def rasp_wait_flag(config, expected_command="S"):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             server.bind((host, port))
             server.listen(1)
-            print(f"Aguardando '{expected_command}' do PC em {host}:{port}...")
+            print(f"Aguardando comando do PC em {host}:{port}...")
             conn, addr = server.accept()
             with conn:
                 # Recebe o comando
@@ -487,21 +487,23 @@ def rasp_wait_flag(config, expected_command="S"):
                 
                 command = command_bytes.decode().strip()
 
+                print(f"[{Colors.YELLOW}SYNC{Colors.RESET}] Comando '{command}' recebido.")
+                
                 if command == expected_command:
-                    conn.sendall(b'ACK') # Envia confirmação (ACK)
-                    print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando '{expected_command}' recebido e confirmado.")
-                    return True
+                    conn.sendall(b'ACK')
+                    return command  # ou True, conforme seu fluxo
                 else:
-                    conn.sendall(b'NACK') # Envia NACK para comando errado
-                    print(f"[{Colors.RED}SYNC{Colors.RESET}] Comando inesperado recebido: {command}. Tentando novamente...")
-                    return False # Retorna Falso para o código principal tentar de novo
-        return False
+                    conn.sendall(b'NACK')
+                    print(f"[{Colors.RED}SYNC{Colors.RESET}] Comando inesperado '{command}', aguardando '{expected_command}'.")
+                    return command
+    
+        return None
     except (ConnectionResetError, ConnectionRefusedError) as e:
         print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro de conexão ({e}). Tentando novamente...")
-        return False
+        return None
     except Exception as e:
         print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro: {e}")
-        return False
+        return None
 
 def send_flag(config, command="S"):
     """

@@ -40,7 +40,7 @@ CONFIG = {
 
     # Model configs
     "model_name": 'PatchCore',
-    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/src/results/Patchcore/Cabo/v4/weights/lightning/model.ckpt",
+    "ckpt_path": None,
     "evaluate": True, 
 
     "operation_mode" : 'Train', # Operação com modelo ('Inference','Train','Continue')
