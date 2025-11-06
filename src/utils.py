@@ -24,7 +24,6 @@ CONFIG = {
     "time_sample" : 0.2,
     "img_n" : 100,
     "collect_img_size": 640,
-    "crop_x" : (180, 470),
 
     # Recebimento do modelo pela rasp
     "receive_model" : False, # Envio do PC / Recebimento pela Rasp do modelo
@@ -34,20 +33,18 @@ CONFIG = {
     "dataset_root": './data',
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
-    "folder_name": 'Test',
-    "normal_dir": "img_nor",#"data/normal", # Imagens normais para treinamento
-    "abnormal_test_dir": "img_abn", #"data/abnormal", # Imagens anômalas para teste
+    "folder_name": 'Barra',
+    "normal_dir": "img_barra_nor",#"data/normal", # Imagens normais para treinamento
+    "abnormal_test_dir": "img_test", #"data/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "img_test", #"data/test", # Imagens normais para teste
 
     # Model configs
     "model_name": 'PatchCore',
-    "ckpt_path": None,
+    "ckpt_path": "C:/Users/Leonardo/Downloads/Programas/PFC/src/results/Patchcore/Cabo/v4/weights/lightning/model.ckpt",
     "evaluate": True, 
-    
-    "export_type": "onnx",
 
-    "mode" : 'Train', # Operação com modelo ('Inference','Train','Continue')
-    "on_pc_inference" : True, # Executa inferência no PC com imagens da Raspberry
+    "operation_mode" : 'Train', # Operação com modelo ('Inference','Train','Continue')
+    "network_inference" : True, # Executa inferência no PC com imagens da Raspberry
 
     # Visualização
     "live" : False, # Inferência em tempo real, False: Inferência em imagens salvas
@@ -86,8 +83,8 @@ def anomaly_args(config, mode="rasp"):
         ("collect", bool, "Habilita a coleta de imagens (True/False)"),
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("model_name", str, "Nome do modelo para ser treinado"),
-        ("mode", str, "Escolhe o modo de operação da detecção ('Train', 'Inference')"),
-        ("on_pc_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
+        ("operation_mode", str, "Escolhe o modo de operação da detecção ('Train', 'Inference')"),
+        ("network_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
     ]
 
     rasp_args = [
@@ -96,7 +93,7 @@ def anomaly_args(config, mode="rasp"):
         ("time_sample", float, "Intervalo entre capturas automáticas de imagens"),
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("receive_model", bool, "Habilita a recepção do modelo via rede (True/False)"),
-        ("on_pc_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
+        ("network_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
     ]
 
     # Adiciona argumentos específicos de cada modo
@@ -105,6 +102,7 @@ def anomaly_args(config, mode="rasp"):
 
         if arg_type == bool:
             parser.add_argument(
+                f"-{key[0]}",
                 f"--{key}", 
                 type=str_to_bool, 
                 default=config[key], 
@@ -113,7 +111,7 @@ def anomaly_args(config, mode="rasp"):
 
         else:
             parser.add_argument(
-                f"-{key}",
+                f"-{key[0]}",
                 f"--{key}", 
                 type=arg_type, 
                 default=config[key], 
@@ -145,10 +143,10 @@ def print_config_summary(config: dict, mode: str = "rasp"):
     if mode == "rasp":
         keys_to_show = [
             "pc_ip", "collect", "time_sample", "img_n", 
-            "receive_model", "on_pc_inference", "websocket"
+            "receive_model", "network_inference", "websocket"
             ]
     else: 
-        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "mode", "on_pc_inference" ]
+        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "network_inference" ]
 
     # 2. Crie uma string de separação para o cabeçalho
     separator = f"{Colors.CYAN}{'-'*40}{Colors.RESET}"

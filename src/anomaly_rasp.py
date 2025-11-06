@@ -13,7 +13,7 @@ from inference import live_inference_rasp, visualize_imgs
 def main():
     
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
-    if config["collect"] and (config["on_pc_inference"] or config["receive_model"]): 
+    if config["collect"] and (config["network_inference"] or config["receive_model"]): 
         while not rasp_wait_flag(config, expected_command="S"): 
             time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
 
@@ -26,13 +26,12 @@ def main():
             time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
             total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
             image_size=config["collect_img_size"],
-            crop_size=config["crop_x"],
             pc_ip=config["pc_ip"],
             pc_port=config["receive_port"]
         )
-    else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}"
+    else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada. Usando imagens na pasta '{config["normal_dir"]}'{Colors.RESET}"
 
-    if config["on_pc_inference"]:
+    if config["network_inference"]:
         print(f"{Colors.CYAN}Esperando confirmação de treinamento...{Colors.RESET}")
         while not rasp_wait_flag(config, expected_command="M"): 
             time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
@@ -51,7 +50,7 @@ def main():
          from models import MODEL_CONFIGS, create_model
          f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}"
 
-    if not config["on_pc_inference"]:
+    if not config["network_inference"]:
         # 2. Crie o modelo
         model = create_model(config)
         if model == None: return
@@ -62,7 +61,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            if config["on_pc_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120, ser = ser)
+            if config["network_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120, ser = ser)
             else: live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"

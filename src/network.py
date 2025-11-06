@@ -6,32 +6,113 @@ import cv2
 from pathlib import Path
 from utils import Colors
 import time
+from scipy.signal import find_peaks
+import numpy as np
 
-def crop_and_resize(image, x0: int, y0: int, x1: int, y1: int, size: int | None):
+def crop_and_resize2(
+    frame_bgr: np.ndarray, 
+    size: int | None, 
+    ) -> np.ndarray:
     """
-    Corta e redimensiona uma imagem.
+    Localiza o cabo usando detecção de bordas verticais e análise de perfil,
+    e o centraliza dentro de um corte quadrado, redimensionado para o tamanho final.
 
     Args:
-        image (Image.Image): A imagem de entrada (objeto Pillow).
-        x (int): Coordenada X (esquerda) do canto superior esquerdo para o corte.
-        y (int): Coordenada Y (topo) do canto superior esquerdo para o corte.
-        size (int): O lado do quadrado para o corte e o novo tamanho de redimensionamento.
+        frame_bgr: Imagem de entrada em formato BGR (OpenCV).
+        crop_output_size: Tamanho final do lado do quadrado (ex: 256).
+        debug_show_steps: Se True, mostra as imagens intermediárias para depuração.
 
     Returns:
-        Image.Image: A imagem cortada e redimensionada.
+        np.ndarray: O frame final (cortado e redimensionado).
     """
+    h, w, _ = frame_bgr.shape
 
-    # 1. Corta a imagem usando fatiamento de arrays (slicing)
-    # A sintaxe é [y_start:y_end, x_start:x_end]
-    cropped_image = image[y0 : y1, x0 : x1]
+    # --- LIMITES RÍGIDOS PARA AS COORDENADAS X ---
+    X_MIN_ALLOWED = 214
+    X_MAX_ALLOWED = 437
+    Y_CUT = 0
+    
+    # 1. Pré-processamento: Tons de Cinza
+    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
 
-    # 2. Redimensiona a imagem para o tamanho desejado
-    # cv2.resize espera (width, height)
-    if size: 
-        resized_image = cv2.resize(cropped_image, (size, size), interpolation=cv2.INTER_LINEAR)
-        return resized_image
+    # 2. Suavização para reduzir ruído (Gaussian Blur é bom para isso)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0) # Ajuste o tamanho do kernel se necessário
+    
+    # 3. Detecção de Bordas Verticais (Sobel X):
+    # O cabo é um objeto vertical. O operador Sobel na direção X destacará suas bordas verticais.
+    sobelx = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3) # Derivada na direção X
+    sobelx = cv2.convertScaleAbs(sobelx) # Converte de volta para 8-bit
+
+    # 4. Análise do Perfil Horizontal para encontrar a coluna mais "ativa"
+    # Somamos os valores de pixel de cada coluna. O cabo terá um pico de bordas.
+    horizontal_profile = np.sum(sobelx, axis=0)
+
+    # 3. Encontrar Picos (Bordas)
+    PEAK_HEIGHT_THRESHOLD = 20000 
+    PEAK_MIN_DISTANCE = 30       
+    
+    # Filtra os picos com a altura e distância mínima
+    peaks, properties = find_peaks(horizontal_profile, 
+                                   height=PEAK_HEIGHT_THRESHOLD, 
+                                   distance=PEAK_MIN_DISTANCE)
+    
+    center_x = w // 2 # Centro padrão de fallback
+    center_y = h // 2
+
+    # Perfil da metade esquerda
+    left_profile = horizontal_profile[:center_x]
+    
+    # Encontra os picos na metade esquerda
+    left_peaks, left_properties = find_peaks(left_profile, height=PEAK_HEIGHT_THRESHOLD)
+    
+    if left_peaks.size > 0:
+        for peak in reversed(left_peaks):
+            borda_esquerda = peak
+            break
     else:
-        return cropped_image
+        # Fallback se nenhum pico relevante for encontrado (e.g., borda_esquerda = 150)
+        print("[ALERTA] Borda Esquerda não detectada. Usando fallback.")
+        borda_esquerda = int(w * 0.2) # Chute em 20% da largura (ajuste se necessário)
+
+    # Perfil da metade direita
+    right_profile = horizontal_profile[center_x:]
+    
+    # Encontra os picos na metade direita
+    right_peaks, right_properties = find_peaks(right_profile, height=PEAK_HEIGHT_THRESHOLD)
+    
+    if right_peaks.size > 0:
+        for peak in right_peaks:
+            borda_direita = peak + center_x
+            break
+    else:
+        # Fallback se nenhum pico relevante for encontrado (e.g., borda_direita = 500)
+        print("[ALERTA] Borda Direita não detectada. Usando fallback.")
+        borda_direita = int(w * 0.8) # Chute em 80% da largura (ajuste se necessário)
+
+    # Se a borda detectada estiver fora do limite permitido, usamos o limite.
+    borda_esquerda = max(X_MIN_ALLOWED, borda_esquerda)
+    borda_direita = min(X_MAX_ALLOWED, borda_direita)
+
+    # Verifica se os limites se cruzaram após o clamping
+    if borda_esquerda >= borda_direita:
+         print(f"[ERRO] Limites de Clamping se cruzaram! Usando limites seguros: ({X_MIN_ALLOWED}, {X_MAX_ALLOWED})")
+         borda_esquerda = X_MIN_ALLOWED
+         borda_direita = X_MAX_ALLOWED
+
+    center_x = (borda_esquerda + borda_direita) // 2
+
+    # 3. CORTE HORIZONTAL PELAS BORDAS
+    # O corte vertical (altura) permanece na imagem inteira, mas pode ser ajustado
+    x_crop_start = borda_esquerda
+    x_crop_end = borda_direita
+
+    cropped_frame = frame_bgr[Y_CUT:h-Y_CUT, x_crop_start:x_crop_end]
+
+    if size: 
+        resized_frame = cv2.resize(cropped_frame, (size, size), interpolation=cv2.INTER_LINEAR)
+        return resized_frame
+    else:
+        return cropped_frame
 
 # Função para receber todas as imagens e salvar
 def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):

@@ -16,18 +16,18 @@ MODEL_CONFIGS = {
         "class": Patchcore,
         "params": {
             "backbone": "wide_resnet50_2", # "resnet18"
-            "layers": ("layer2", "layer3"),
+            "layers": ("layer2", "layer3"), # "layer3", "layer4"
             "coreset_sampling_ratio": 0.1,
             "num_neighbors": 9
         },
         "inference_params": {
-            "pre_trained": False # Parâmetro específico para inferência
+            "pre_trained": True # Parâmetro específico para inferência
         }
     },
     "Padim": {
         "class": Padim,
         "params": {
-            "backbone": 'resnet18', # "resnet18"
+            "backbone": "wide_resnet50_2", # "resnet18"
             "layers": ["layer1", "layer2", "layer3"], # ,
             #"n_features": 100, #resnet18=100
             "pre_trained": True,
@@ -107,9 +107,11 @@ def create_model(config):
     Funciona para treinamento e inferência.
     """
     from anomalib.pre_processing import PreProcessor
+    import torch
+
     model_name = config.get("model_name")
     ckp_path = config.get("ckpt_path")
-    mode = config.get("mode")
+    mode = config.get("operation_mode")
 
     image_size = config["image_size"]
     transform= v2.Compose([
@@ -127,14 +129,12 @@ def create_model(config):
     ModelClass = model_info["class"]
     model_params = model_info["params"]
     
-    model = None
+    # Cria um novo modelo para treinamento
+    model = ModelClass(pre_processor=pre_processor, **model_params)
     
     # 2. Lógica para Treinamento ou Inferência (unificada)
     if mode != 'Inference':
-        # Cria um novo modelo para treinamento
-        model = ModelClass(pre_processor=pre_processor, **model_params)
         print(f"{Colors.GREEN}Modelo de treinamento '{model_name}' criado com sucesso.{Colors.RESET}")
-        
     else:
         if not (ckp_path and Path(ckp_path).exists()):
             results_path = Path("results") / config["model_name"] / config["folder_name"]
@@ -143,21 +143,23 @@ def create_model(config):
         else:
             # Carrega um modelo existente para inferência
             print(f"{Colors.CYAN}Carregando o MELHOR modelo de {model_name} para inferência de: {ckp_path}{Colors.RESET}")
+        
         start_time = time.time()
         
         # Junta os parâmetros de treinamento com os de inferência
         load_params = {**model_params, **model_info.get("inference_params", {})}
         
-        # A classe Padim não tem o método `load_from_checkpoint`
-        if hasattr(ModelClass, 'load_from_checkpoint'):
-            model = ModelClass.load_from_checkpoint(
-                checkpoint_path=ckp_path,
-                **load_params
-            )
+        if ckp_path:
+            # A classe Padim não tem o método `load_from_checkpoint`
+            if hasattr(ModelClass, 'load_from_checkpoint'):
+                model = ModelClass.load_from_checkpoint(
+                    checkpoint_path=ckp_path,
+                    **load_params
+                )
+                print('load')
         else:
-            print(f"{Colors.YELLOW}AVISO: Modelo '{model_name}' não suporta carregamento de checkpoint. "
+            print(f"{Colors.YELLOW}AVISO: Modelo '{model_name}' não encontrado. "
                   "O modelo será criado do zero.{Colors.RESET}")
-            model = ModelClass(**model_params)
         
         end_time = time.time()
         load_time = end_time - start_time
@@ -173,15 +175,15 @@ def train_model(model, datamodule, config): # Encapsula a lógica de treinamento
     engine = Engine(logger=False,accelerator="auto", max_epochs=50)
     #trainer = Trainer(devices=4, accelerator="gpu", strategy="ddp")
 
-    if config["mode"] == "New": ckpt_path = None
-    elif config["mode"] == "Continue": ckpt_path = config["ckpt_path"]
+    if config["operation_mode"] == "New": ckpt_path = None
+    elif config["operation_mode"] == "Continue": ckpt_path = config["ckpt_path"]
     else: ckpt_path=None
     
     engine.fit(model=model,
             datamodule=datamodule, 
             ckpt_path=ckpt_path, # Caminho para um checkpoint para continuar o treinamento.
             ) 
-    
+
     end_time = time.time()   # Registra o tempo de fim
     training_time = end_time - start_time
     

@@ -2,18 +2,18 @@ from utils import Colors, CONFIG as config, anomaly_args, print_config_summary
 
 def main():
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
-    if config["collect"] and (config["on_pc_inference"] or config["receive_model"]): 
+    if config["collect"] and (config["network_inference"] or config["receive_model"]): 
         # Espera que o PC se conecte à Pi e envie a flag de início de coleta
         while not send_flag(config, command="S"):
-            print(f"{Colors.YELLOW}Aguardando Pi... Nova tentativa de sincronização em 3s.{Colors.RESET}")
-            time.sleep(3)
+            print(f"{Colors.YELLOW}Aguardando Pi... Nova tentativa de sincronização em 1s.{Colors.RESET}")
+            time.sleep(1)
     # --- Passo 1: Receber todas as imagens da Raspberry Pi ---
     
     receive_path = Path(config["normal_dir"])
     if config["collect"]:
         receive_all_images_and_save(config["img_n"], receive_path, config["receive_port"])
         print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
-    else: print(f"{Colors.YELLOW}Coleta de Imagens Desabilitada{Colors.RESET}")
+    else: print(f"{Colors.YELLOW}Coleta de Imagens Desabilitada.{Colors.RESET}")
 
     # --- Passo 2: Executar o treinamento com as imagens recebidas ---
     dataset_root = Path(config["dataset_root"])
@@ -22,16 +22,16 @@ def main():
     model = create_model(config)
     if model is None: return
 
-    if config["mode"]=='Train':
+    if config["operation_mode"]=='Train':
         print(f"{Colors.BLUE}Iniciando treinamento do modelo...{Colors.RESET}")
         engine, training_time = train_model(model, datamodule, config)
         print(f"{Colors.BLUE}Treinamento concluído em {training_time:.2f} segundos.{Colors.RESET}")
 
-    # --- 5. Avaliação com métricas (no conjunto de teste preparado) ---
-    if config["evaluate"]: 
-        print(f"{Colors.BLUE}Iniciando avaliação do modelo no conjunto de teste...{Colors.RESET}")
-        test_results, eval_time = evaluate_model(engine, model, datamodule)
-        print(f"{Colors.BLUE}Resultados da avaliação concluída em {eval_time:.2f}:{Colors.RESET}")
+        # --- 5. Avaliação com métricas (no conjunto de teste preparado) ---
+        if config["evaluate"]: 
+            print(f"{Colors.BLUE}Iniciando avaliação do modelo no conjunto de teste...{Colors.RESET}")
+            test_results, eval_time = evaluate_model(engine, model, datamodule)
+            print(f"{Colors.BLUE}Resultados da avaliação concluída em {eval_time:.2f}:{Colors.RESET}")
 
     # --- Passo 3: Enviar o modelo treinado para a Raspberry Pi ---
     # Encontre o caminho do checkpoint mais recente
@@ -39,8 +39,7 @@ def main():
     model_path = get_latest_checkpoint(results_path)
 
     if not config["receive_model"] and config["live"]:
-        send_flag(config)
-        while not send_flag(config, command="MODEL_TRAINED"):
+        while not send_flag(config, command="M"):
             print(f"{Colors.YELLOW}Falha ao enviar confirmação de modelo treinado. Reintentando em 3s...{Colors.RESET}")
             time.sleep(3)
     elif model_path and config["live"]:
@@ -52,12 +51,12 @@ def main():
     print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 
     if config["live"]:
-            if config["on_pc_inference"]: serve_inference_to_pi(model, config,threshold=0.9)
+            if config["network_inference"]: serve_inference_to_pi(model, config,threshold=0.9)
             elif config["websocket"]: receive_and_process_data()
             else: live_inference_opencv(model, config["image_size"])
     else:
         normal_dir = Path(config["normal_test_dir"])
-        img_class="Normal"
+        img_class="Test"
         visualize_imgs(normal_dir, model, img_class, config["image_size"])
 
         # --- Processar imagens anômalas ---

@@ -4,6 +4,9 @@ from PIL import Image
 import numpy as np
 import time
 from utils import Colors
+import cv2
+
+ANOMALY_SCORE = 1.0
 
 def predict_image(model, image, transform, image_size):
 
@@ -32,6 +35,30 @@ def predict_image(model, image, transform, image_size):
     
     return image, anomaly_map, pred_score, pred_mask
 
+def apply_pred_mask_on_image(image, pred_mask, color=(0,0,255)):
+
+# O parâmetro alpha ajusta a transparência da máscara sobre a imagem.
+# Para destacar ainda mais as bordas, use outline=True e, opcionalmente, altere a espessura do contorno.
+# Adapte para coloração diferente conforme a classe de anomalia (se for o caso).
+
+    # Converte imagem para RGB se estiver em formato PIL ou BGR
+    if isinstance(image, np.ndarray):
+        img = image.copy()
+    else:  # Se for PIL, converte para np.ndarray
+        img = np.array(image)
+        if img.shape[2] == 4:  # Remove canal alpha se existir
+            img = img[:, :, :3]
+
+    # Redimensione a máscara para o tamanho da imagem
+    pred_mask_resized = cv2.resize(pred_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+    mask_bool = pred_mask_resized > 255
+
+    # Se quiser borda, desenhe contorno em volta de regiões anômalas:
+    contours, _ = cv2.findContours(pred_mask_resized, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(img, contours, -1, color, 1)
+
+    return img
+
 def visualize_imgs(path_dir, model, img_class, image_size):
     """
     Processa e visualiza imagens de anomalia usando OpenCV.
@@ -42,7 +69,6 @@ def visualize_imgs(path_dir, model, img_class, image_size):
         img_class (str): O nome da classe de imagem (ex: "normal", "anomalia").
         image_size (int): O tamanho da imagem para redimensionamento.
     """
-    import cv2
     model.eval()
 
     # Certifique-se de que as transformações correspondem às usadas no datamodule
@@ -66,6 +92,7 @@ def visualize_imgs(path_dir, model, img_class, image_size):
             
             # Converte a imagem original para o formato BGR para exibição com cv2
             original_img_cv2 = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
+            original_img_cv2 = apply_pred_mask_on_image(original_img_cv2, pred_mask, color=(0,0,255))
 
             # Redimensiona o mapa de anomalia para o tamanho da imagem original
             anomaly_map_resized = cv2.resize(anomaly_map, (original_img_cv2.shape[1], original_img_cv2.shape[0]))
@@ -103,7 +130,6 @@ def live_inference_opencv(model, image_size):
         image_size (int): O tamanho para redimensionar a imagem de entrada do modelo.
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
-    import cv2
     # 1. Configuração da Câmera
     cap = cv2.VideoCapture(0)  # 0 geralmente se refere à câmera padrão do sistema
     if not cap.isOpened():
@@ -136,6 +162,8 @@ def live_inference_opencv(model, image_size):
             start_time=time.time()
             original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
             print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.5)} / Area: {check_for_anomaly_by_area(pred_mask, 100, 0.5)}")
+
+            original_frame_display = apply_pred_mask_on_image(original_frame_display, pred_mask, color=(0,0,255))
 
             # Pós-processamento para visualização com OpenCV:
             # Redimensiona o mapa de anomalia para o tamanho do frame original
@@ -192,7 +220,6 @@ def live_inference_rasp(model, config, camera):
         device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
     """
     import os
-    import cv2
 
     # 1. Configuração da Câmera
     picam2 = camera # Cria uma instância do controle da câmera
@@ -244,6 +271,7 @@ def live_inference_rasp(model, config, camera):
             original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
             print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.9)} / Area: {check_for_anomaly_by_area(pred_mask, 100, 0.9)}")
             
+            original_frame_display = apply_pred_mask_on_image(original_frame_display, pred_mask, color=(0,0,255))
 
             # Pós-processamento para visualização com OpenCV:
             # Redimensiona o mapa de anomalia para o tamanho do frame original
@@ -325,7 +353,6 @@ def serve_inference_to_pi(model, config, threshold=0.9):
         image_size (int): O tamanho da imagem para inferência.
     """
     import struct
-    import cv2
     import socket
     import pickle
     from datetime import datetime
@@ -460,7 +487,7 @@ def serve_inference_to_pi(model, config, threshold=0.9):
 
 # Abordagem é a mais simples.
 # Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.
-def check_for_anomaly_by_score(pred_score: float, threshold: float = 0.5) -> bool:
+def check_for_anomaly_by_score(pred_score: float, threshold: float = ANOMALY_SCORE) -> bool:
     """
     Verifica se uma imagem contém anomalias com base em seu score de anomalia.
 
@@ -475,7 +502,7 @@ def check_for_anomaly_by_score(pred_score: float, threshold: float = 0.5) -> boo
 
 # Mais sensível a anomalias localizadas, independentemente do score total da imagem.
 # Pode ser sensível a ruído, detectando pequenos grupos de pixels anômalos que não representam um defeito real.
-def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 100, threshold: float = 0.5) -> bool:
+def check_for_anomaly_by_area(pred_mask: np.ndarray, min_area_threshold: int = 100, threshold: float = ANOMALY_SCORE) -> bool:
     """
     Verifica se a área de anomalia na máscara é maior que um limiar de pixels.
 
