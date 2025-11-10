@@ -15,4 +15,4 @@ __pycache__/
 # Se o seu código salva em 'imagens_output/', ignore essa pasta.
 inference_results/
 results/
-img_640/
+**/img*

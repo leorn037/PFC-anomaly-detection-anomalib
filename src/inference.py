@@ -476,7 +476,7 @@ def serve_inference_to_pi(model, config, threshold=0.9):
                         print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
                         break
 
-                    print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
+                    print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly_confirmed}. Enviando flag...")
 
                 except ConnectionResetError:
                     print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")

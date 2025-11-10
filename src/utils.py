@@ -33,7 +33,7 @@ CONFIG = {
     "dataset_root": './data',
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
-    "folder_name": 'Barra',
+    "folder_name": 'Teste',
     "normal_dir": "data/normal", # Imagens normais para treinamento
     "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "data/test", # Imagens normais para teste

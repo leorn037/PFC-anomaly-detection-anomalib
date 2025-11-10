@@ -372,7 +372,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
     from gpiozero import OutputDevice # Usamos OutputDevice para um pino digital
     import atexit # Usado para garantir que o pino seja desligado ao sair
 
-    ANOMALY_SIGNAL_PIN = 17 
+    ANOMALY_SIGNAL_PIN = 17 # Linha 1 Coluna 6
     try:
         anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=True, initial_value=False)
 
