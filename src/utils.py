@@ -34,21 +34,21 @@ CONFIG = {
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Barra',
-    "normal_dir": "img_barra_nor",#"data/normal", # Imagens normais para treinamento
-    "abnormal_test_dir": "img_test", #"data/abnormal", # Imagens anômalas para teste
-    "normal_test_dir": "img_test", #"data/test", # Imagens normais para teste
+    "normal_dir": "data/normal", # Imagens normais para treinamento
+    "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
+    "normal_test_dir": "data/test", # Imagens normais para teste
 
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
     "evaluate": True, 
 
-    "operation_mode" : 'Train', # Operação com modelo ('Inference','Train','Continue')
-    "network_inference" : True, # Executa inferência no PC com imagens da Raspberry
+    "operation_mode" : 'Train', # Operação com modelo ('Inference','Train')
+    "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
 
     # Visualização
-    "live" : False, # Inferência em tempo real, False: Inferência em imagens salvas
-    "websocket" : True, # Envio via websocket da Raspberry para o PC
+    "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas
+    "websocket" : True, # Envio de imagens via websocket da Raspberry para o PC
 }
 
 import argparse
