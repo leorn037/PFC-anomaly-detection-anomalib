@@ -9,7 +9,7 @@ import time
 from scipy.signal import find_peaks
 import numpy as np
 
-def crop_and_resize2(
+def crop_and_resize(
     frame_bgr: np.ndarray, 
     size: int | None, 
     ) -> np.ndarray:
@@ -103,8 +103,8 @@ def crop_and_resize2(
 
     # 3. CORTE HORIZONTAL PELAS BORDAS
     # O corte vertical (altura) permanece na imagem inteira, mas pode ser ajustado
-    x_crop_start = borda_esquerda
-    x_crop_end = borda_direita
+    x_crop_start = borda_esquerda+int(0.05*( borda_direita - borda_esquerda))
+    x_crop_end = borda_direita-int(0.05*(borda_direita - borda_esquerda))
 
     cropped_frame = frame_bgr[Y_CUT:h-Y_CUT, x_crop_start:x_crop_end]
 
@@ -402,8 +402,6 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
                 # 1. Captura o frame da câmera
                 frame = picam2.capture_array()
                 frame = crop_and_resize(frame, 
-                                        x0=config["crop_x"][0], y0=0, 
-                                        x1=config["crop_x"][1], y1=config["collect_img_size"], 
                                         size=None)
 
                 

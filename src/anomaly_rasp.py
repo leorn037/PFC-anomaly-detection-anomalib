@@ -73,7 +73,7 @@ def main():
     # --- Processar imagens normais ---
 
     if config["live"]:
-            if config["network_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120, ser = ser)
+            if config["network_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120)
             else: live_inference_rasp(model, config, camera)
     else:
         #normal_dir = dataset_root / "test" / "normal"
