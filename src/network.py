@@ -374,7 +374,7 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
 
     ANOMALY_SIGNAL_PIN = 17 
     try:
-        anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=False, initial_value=False)
+        anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=True, initial_value=False)
 
         # Função para garantir que o pino seja desligado ao final do script
         def cleanup_gpio():
