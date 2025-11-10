@@ -1,0 +1,11 @@
+# Pastas com imagens
+**/img*
+src/inference_results/
+
+# Pastas com os modelos
+results/
+data
+
+# Pastas de dependências de ambientes virtuais
+venv/
+.venv/

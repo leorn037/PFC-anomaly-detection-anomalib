@@ -1,0 +1,18 @@
+# Ambiente Virtual Python (MUITO IMPORTANTE ignorar)
+venv/
+.venv/
+__pycache__/
+
+# Pastas e arquivos de cache e build
+.git/
+.gitignore
+*.log
+*.tmp
+.DS_Store
+.vscode/
+
+# Pasta de saída de imagens/dados (MUITO IMPORTANTE se você mapeia com VOLUME)
+# Se o seu código salva em 'imagens_output/', ignore essa pasta.
+inference_results/
+results/
+img_640/
