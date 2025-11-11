@@ -165,6 +165,7 @@ def collect_and_split_dataset(
 
             # --- Lógica de Rede (se a conexão existir) ---
             if conn:
+                conn.settimeout(time_sample)
                 try:
                     # Envia o frame para o PC
                     send_tcp_frame(conn, frame_bgr)
