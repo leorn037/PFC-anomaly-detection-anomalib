@@ -114,7 +114,7 @@ def main():
         # O main() é o dono dos recursos de rede e os fecha
         if conn: conn.close()
         if server_sock: server_sock.close()
-        # A câmera e o GPIO são fechados pelo __main__
+        camera.stop()
 
 # TODO: receive_model_from_pc(): websocket e sincronização
 # TODO: live_inference_rasp(): anomaly_output e websocket

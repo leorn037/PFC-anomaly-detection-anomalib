@@ -13,7 +13,6 @@ def main():
         receive_path = Path(config["normal_dir"])
         if config["collect"]:
             receive_all_images_and_save(config["img_n"], receive_path, sock)
-            print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
         else: print(f"{Colors.YELLOW}Coleta de Imagens Desabilitada.{Colors.RESET}")
 
         # --- Passo 2: Executar o treinamento com as imagens recebidas ---

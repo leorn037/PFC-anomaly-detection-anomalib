@@ -177,7 +177,6 @@ def pi_connect(pi_ip, pi_port):
             except (ConnectionRefusedError, socket.timeout) as e:
                 print(f"[{Colors.RED}Rede-PC{Colors.RESET}] Falha ao conectar ({e}). A Pi está escutando? Tentando novamente em 5s...")
                 time.sleep(3)
-                return None
 
 # Função para receber todas as imagens e salvar
 def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.socket):
@@ -279,14 +278,15 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
         
         except socket.timeout:
             print(f"[{Colors.YELLOW}Timeout{Colors.RESET}] A Pi parou de enviar frames. Encerrando coleta.")
-            break
+            continue
         except (ConnectionResetError, BrokenPipeError):
             print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
             break
         except Exception as e:
             print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
             break
-
+    
+    print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
     cv2.destroyAllWindows()
 
 # Função para enviar o modelo

@@ -18,7 +18,7 @@ MODEL_CONFIGS = {
             "backbone": "wide_resnet50_2", # "resnet18"
             "layers": ("layer2", "layer3"), # "layer3", "layer4"
             "coreset_sampling_ratio": 0.1,
-            "num_neighbors": 9
+            "num_neighbors": 3
         },
         "inference_params": {
             "pre_trained": True # Parâmetro específico para inferência
