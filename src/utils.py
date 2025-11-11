@@ -86,7 +86,6 @@ def anomaly_args(config, mode="rasp"):
     ]
 
     rasp_args = [
-        ("pc_ip", str, "IP do PC para receber dados"),
         ("collect", bool, "Habilita a coleta de imagens (True/False)"),
         ("time_sample", float, "Intervalo entre capturas automáticas de imagens"),
         ("img_n", int, "Número de imagens a ser capturadas"),
@@ -140,7 +139,7 @@ def print_config_summary(config: dict, mode: str = "rasp"):
     # 1. Defina um conjunto padrão de chaves se nenhuma for fornecida
     if mode == "rasp":
         keys_to_show = [
-            "pc_ip", "collect", "time_sample", "img_n", 
+            "collect", "time_sample", "img_n", 
             "receive_model", "network_inference", "visual_rasp"
             ]
     else: 
