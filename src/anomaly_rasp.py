@@ -32,7 +32,7 @@ except Exception as e:
     anomaly_output = None # Se falhar, define como None
 
 
-def main():
+def main(camera):
     
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
     
@@ -45,7 +45,6 @@ def main():
 
     try:
         # 1. Prepare dataset:
-        camera = setup_camera(config["collect_img_size"])
         if config["collect"]: # Novo dataset
             ret = collect_and_split_dataset(
                 camera,
@@ -56,7 +55,6 @@ def main():
                 conn = conn,
             )
             if ret == "DISCONNECTED":
-                print(11111)
                 camera.stop()
                 return True
 
@@ -91,7 +89,6 @@ def main():
                 if config["network_inference"] and conn: 
                     ret = live_inference_rasp_to_pc(camera, conn, anomaly_output)
                     if ret == "DISCONNECTED": 
-                        print(2222222)
                         camera.stop()
                         return True
                 else: live_inference_rasp(model, config, camera, anomaly_output)
@@ -138,6 +135,8 @@ if __name__ == "__main__":
 
     # Para timm (PyTorch Image Models)
     os.environ["TIMM_IGNORE_DEPRECATED_WARNINGS"] = "1"
+
+    camera = setup_camera(config["collect_img_size"])
 
     ret = main()
     while main():
