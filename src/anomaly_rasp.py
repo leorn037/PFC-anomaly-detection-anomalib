@@ -55,7 +55,8 @@ def main():
                 image_size=config["collect_img_size"],
                 conn = conn,
             )
-            if ret == "DISCONNECTED": 
+            if ret == "DISCONNECTED":
+                print(11111)
                 camera.stop()
                 return True
 
@@ -90,6 +91,7 @@ def main():
                 if config["network_inference"] and conn: 
                     ret = live_inference_rasp_to_pc(camera, conn, anomaly_output)
                     if ret == "DISCONNECTED": 
+                        print(2222222)
                         camera.stop()
                         return True
                 else: live_inference_rasp(model, config, camera, anomaly_output)

@@ -409,6 +409,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Falha na conexão ao sincronizar 'M': {e}")
         except Exception as e:
             print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Erro inesperado: {e}")
+            return
         
     inference_count = 0
     # Loop principal de inferência

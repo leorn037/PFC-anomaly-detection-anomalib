@@ -12,7 +12,8 @@ def main():
     try:
         receive_path = Path(config["normal_dir"])
         if config["collect"]:
-            receive_all_images_and_save(config["img_n"], receive_path, sock)
+            ret = receive_all_images_and_save(config["img_n"], receive_path, sock)
+            if ret == 'DISCONNECTED': return
         else: print(f"{Colors.YELLOW}Coleta de Imagens Desabilitada.{Colors.RESET}")
 
         # --- Passo 2: Executar o treinamento com as imagens recebidas ---

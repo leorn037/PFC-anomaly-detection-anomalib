@@ -217,7 +217,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Falha na conexão ao sincronizar 'P': {e}")
         except Exception as e:
             print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Erro inesperado: {e}")
-            return
+            return "DISCONNECTED"
 
     print(f"{Colors.GREEN}Recebendo {num_images} imagens...{Colors.RESET}")
     print(f"{Colors.GREEN}Pressione '{Colors.CYAN}c{Colors.RESET}' para iniciar a coleta de {num_images} imagens.{Colors.RESET}")

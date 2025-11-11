@@ -115,7 +115,7 @@ def collect_and_split_dataset(
                 conn.sendall(b'ACK')
                 print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando 'S' recebido. Iniciando coleta.")
             elif command == "M":
-                conn.sendall(b'ACK')
+                conn.sendall(b'NACK')
                 print(f"{Colors.YELLOW}PC pulou coleta (recebido 'M'). Saindo da função.{Colors.RESET}")
                 return  # Sinaliza ao main para pular
             else:
