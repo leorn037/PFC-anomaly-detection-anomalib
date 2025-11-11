@@ -138,7 +138,6 @@ if __name__ == "__main__":
 
     camera = setup_camera(config["collect_img_size"])
 
-    ret = main(camera)
     while main(camera):
         print(f"[{Colors.MAGENTA}REINICIANDO O FLUXO PRINCIPAL...{Colors.RESET}")
         #todo: configs

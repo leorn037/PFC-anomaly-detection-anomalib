@@ -113,7 +113,7 @@ def collect_and_split_dataset(
 
             if command == "P":
                 conn.sendall(b'ACK')
-                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando 'S' recebido. Iniciando coleta.")
+                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando 'P' recebido. Iniciando coleta.")
             elif command == "M":
                 conn.sendall(b'NACK')
                 print(f"{Colors.YELLOW}PC pulou coleta (recebido 'M'). Saindo da função.{Colors.RESET}")
@@ -165,11 +165,13 @@ def collect_and_split_dataset(
 
             # --- Lógica de Rede (se a conexão existir) ---
             if conn:
-                conn.settimeout(time_sample)
+                
                 try:
                     # Envia o frame para o PC
+                    conn.settimeout(None)
                     send_tcp_frame(conn, frame_bgr)
-
+                    conn.settimeout(time_sample)
+                    
                     # Tenta receber um comando do PC de forma não-bloqueante
                     try:
                         command = conn.recv(1).decode().strip()

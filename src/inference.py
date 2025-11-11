@@ -413,7 +413,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
         
     inference_count = 0
     # Loop principal de inferência
-    sock.settimeout(None)
+
     while True:
         try:    
             start_time = time.time()
@@ -422,12 +422,12 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             if not image_size_data: 
                 print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Pi encerrou o stream.")
                 break
-            image_size = struct.unpack("!I", image_size_data)[0]
+            message_size = struct.unpack("!I", image_size_data)[0]
             
             # 2. Recebe a imagem completa
             image_data = b''
-            while len(image_data) < image_size:
-                packet = sock.recv(image_size - len(image_data))
+            while len(image_data) < message_size:
+                packet = sock.recv(message_size - len(image_data))
                 if not packet: break
                 image_data += packet
             
