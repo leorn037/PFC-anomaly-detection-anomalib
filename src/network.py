@@ -454,7 +454,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
 
         try:
             conn.settimeout(None) # Espera indefinidamente pelo comando da fase
-            command_bytes = conn.recv(4)
+            command_bytes = conn.recv(1)
             if not command_bytes: raise ConnectionResetError("PC Desconectou")
             
             command = command_bytes.decode().strip()
