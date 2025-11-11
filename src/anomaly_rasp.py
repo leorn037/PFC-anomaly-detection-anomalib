@@ -40,7 +40,7 @@ def main():
     conn = None
     server_sock = None
     if config["network_inference"] or config["receive_model"] or config["visual_rasp"]:
-        conn, server_sock = pi_socket(config["receive_port"])
+        conn, server_sock = pi_socket(config["pi_port"])
     # --- Fim da Configuração do Servidor ---
 
     try:
