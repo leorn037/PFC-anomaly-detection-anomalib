@@ -101,7 +101,7 @@ def collect_and_split_dataset(
     if conn:
         import socket
 
-        print(f"[{Colors.CYAN}Coleta{Colors.RESET}] Aguardando comando de INÍCIO DE COLETA ('S')...")
+        print(f"[{Colors.CYAN}Coleta{Colors.RESET}] Aguardando comando de INÍCIO DE COLETA ('P')...")
         
         try:
             # Espera (bloqueante) pelo comando 'S' ou 'M'

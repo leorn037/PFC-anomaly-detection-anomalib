@@ -40,8 +40,6 @@ def main():
 
         if model_path and config["receive_model"] and config["live"]:
             send_model_to_pi(model_path,config, MODEL_CONFIGS)
-        else:
-            print(f"{Colors.RED}Erro: Não foi possível encontrar o modelo treinado para enviar.{Colors.RESET}")
         
         # --- 6. Verificação e visualização da detecção individual por código ---
         print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")

@@ -412,9 +412,9 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
         
     inference_count = 0
     # Loop principal de inferência
-    try:
-        while True:
-        
+    sock.settimeout(None)
+    while True:
+        try:    
             start_time = time.time()
             # 1. Recebe o tamanho da imagem
             image_size_data = sock.recv(4)
@@ -495,14 +495,16 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
             print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly_confirmed}. Enviando flag...")
 
-    except socket.timeout:
-        print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")
-    except ConnectionResetError:
-        print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
-    except Exception as e:
-        print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
-    finally:
-        cv2.destroyAllWindows()
+        except socket.timeout:
+            print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")
+        except ConnectionResetError:
+            print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
+            break
+        except Exception as e:
+            print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+            break
+            
+    cv2.destroyAllWindows()
     
 # Abordagem é a mais simples.
 # Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.

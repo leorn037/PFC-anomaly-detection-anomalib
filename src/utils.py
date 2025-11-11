@@ -45,7 +45,7 @@ CONFIG = {
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
 
     # Visualização
-    "live" : False, # Inferência em tempo real, False: Inferência em imagens salvas
+    "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas
     "visual_rasp" : False, # Envio de imagens via websocket da Raspberry para o PC
 }
 

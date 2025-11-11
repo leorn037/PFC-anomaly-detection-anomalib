@@ -88,7 +88,7 @@ def main():
 
         if config["live"]:
                 if config["network_inference"] and conn: 
-                    ret = live_inference_rasp_to_pc(camera, conn, anomaly_output, timeout = 120)
+                    ret = live_inference_rasp_to_pc(camera, conn, anomaly_output)
                     if ret == "DISCONNECTED": 
                         camera.stop()
                         return True
