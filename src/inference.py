@@ -342,7 +342,7 @@ def live_inference_rasp(model, config, camera):
             cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
-def serve_inference_to_pi(model, config, threshold=0.9):
+def serve_inference_to_pi(model, config, sock, threshold=0.9):
     """
     Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
 
@@ -360,12 +360,10 @@ def serve_inference_to_pi(model, config, threshold=0.9):
     import os
 
     # --- Configuração de Consenso ---
-    CONSECUTIVE_ANOMALY_LIMIT = 5 # <--- NOVO: Limite de flags seguidas
-    anomaly_streak = 0            # <--- NOVO: Contador de flags consecutivas
-    is_anomaly_confirmed = False  # <--- NOVO: Flag para o sinal a ser enviado para a Pi
+    CONSECUTIVE_ANOMALY_LIMIT = 5 # Limite de flags seguidas
+    anomaly_streak = 0            # Contador de flags consecutivas
+    is_anomaly_confirmed = False  # Flag para o sinal a ser enviado para a Pi
     
-    pc_ip = '0.0.0.0'
-    pc_port = config["receive_port"]
     image_size = config["image_size"]
 
     # --- Lógica de criação de diretório de inferência ---
@@ -386,105 +384,126 @@ def serve_inference_to_pi(model, config, threshold=0.9):
 
     model.eval() # Coloca o modelo em modo de avaliação
     
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-        server_sock.bind((pc_ip, pc_port))
-        server_sock.listen(1)
-        print(f"{Colors.GREEN}Servidor pronto. Aguardando conexão da Raspberry Pi em {pc_ip}:{pc_port}...{Colors.RESET}")
+    if not sock:
+        print(f"[{Colors.RED}Erro{Colors.RESET}] Conexão de rede não estabelecida. Abortando coleta.")
+        return
+
+    command = "M"
+    ack_received = False
+    while not ack_received:
+        try:
+            print(f"[{Colors.CYAN}SYNC-PC{Colors.RESET}] Enviando comando '{command}' para a Pi...")
+            sock.sendall(command.encode('utf-8'))
+            
+            sock.settimeout(10.0) # Timeout para a resposta ACK
+            response = sock.recv(16).decode().strip()
+            
+            if response == "ACK":
+                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
+                ack_received = True
+            else:
+                print(f"[{Colors.YELLOW}SYNC{Colors.RESET}] Resposta inválida da Pi: {response}. ")
+                time.sleep(3)
+
+        except (ConnectionRefusedError, socket.timeout) as e:
+            print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Falha na conexão ao sincronizar 'M': {e}")
+        except Exception as e:
+            print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Erro inesperado: {e}")
         
-        conn, addr = server_sock.accept()
-        with conn:
-            print(f"{Colors.GREEN}Conexão aceita de {addr}. Iniciando inferência...{Colors.RESET}")
+    inference_count = 0
+    # Loop principal de inferência
+    try:
+        while True:
+        
+            start_time = time.time()
+            # 1. Recebe o tamanho da imagem
+            image_size_data = sock.recv(4)
+            if not image_size_data: 
+                print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Pi encerrou o stream.")
+                break
+            image_size = struct.unpack("!I", image_size_data)[0]
             
-            inference_count = 0
-
-            # Loop principal de inferência
-            while True:
-                try:
-                    start_time = time.time()
-                    # 1. Recebe o tamanho da imagem
-                    image_size_data = conn.recv(4)
-                    if not image_size_data: break
-                    image_size = struct.unpack("!I", image_size_data)[0]
-                    
-                    # 2. Recebe a imagem completa
-                    image_data = b''
-                    while len(image_data) < image_size:
-                        packet = conn.recv(image_size - len(image_data))
-                        if not packet: break
-                        image_data += packet
-                    
-                    if not image_data: break
-                    
-                    # 3. Deserializa e decodifica a imagem
-                    encoded_image = pickle.loads(image_data)
-                    decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
-
-                    # 4. Executa a inferência
-                    original_img_pil = Image.fromarray(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB))
-                    _, anomaly_map, pred_score, pred_mask = predict_image(model, original_img_pil, transform_for_model, image_size)
-                    
-                    # 5. Obtém a flag de anomalia
-                    is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
-                    # is_anomaly = check_for_anomaly_by_area(pred_mask, 100, threshold)
-
-                    # --- Lógica de Consenso (A Nova Lógica) ---
-                    if is_anomaly:
-                        anomaly_streak += 1
-                        if anomaly_streak >= CONSECUTIVE_ANOMALY_LIMIT:
-                            is_anomaly_confirmed = True # Confirma que a anomalia é persistente
-                    else:
-                        anomaly_streak = 0 # Reseta a contagem se for um frame normal
-                        is_anomaly_confirmed = False # Garante que a flag seja desligada imediatamente se o score cair
-
-                    # 6. Envia a flag de volta para a Raspberry Pi
-                    response_flag = b'\x01' if is_anomaly_confirmed else b'\x00'
-                    conn.sendall(response_flag)
-
-                    # Pós-processamento para visualização com OpenCV:
-                    anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
-                    anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
-                                                    (decoded_image.shape[1], decoded_image.shape[0]),
-                                                    interpolation=cv2.INTER_LINEAR)
+            # 2. Recebe a imagem completa
+            image_data = b''
+            while len(image_data) < image_size:
+                packet = sock.recv(image_size - len(image_data))
+                if not packet: break
+                image_data += packet
             
-                    # Aplica um mapa de cores (heatmap) para melhor visualização
-                    anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
+            if not image_data: break
+            
+            # 3. Deserializa e decodifica a imagem
+            encoded_image = pickle.loads(image_data)
+            decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
 
-                    # Salva as imagens
-                    timestamp = int(time.time() * 1000)
-                    cv2.imwrite(str(inference_dir / f"original_{inference_count:04d}_{timestamp}.jpg"), decoded_image)
-                    cv2.imwrite(str(inference_dir / f"anomaly_map_{inference_count:04d}_{timestamp}_{pred_score:.4f}.jpg"), anomaly_map_colored)
-                    print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
+            # 4. Executa a inferência
+            original_img_pil = Image.fromarray(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB))
+            _, anomaly_map, pred_score, pred_mask = predict_image(model, original_img_pil, transform_for_model, image_size)
+            
+            # 5. Obtém a flag de anomalia
+            is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
+            # is_anomaly = check_for_anomaly_by_area(pred_mask, 100, threshold)
 
-                    inference_count += 1
+            # --- Lógica de Consenso (A Nova Lógica) ---
+            if is_anomaly:
+                anomaly_streak += 1
+                if anomaly_streak >= CONSECUTIVE_ANOMALY_LIMIT:
+                    is_anomaly_confirmed = True # Confirma que a anomalia é persistente
+            else:
+                anomaly_streak = 0 # Reseta a contagem se for um frame normal
+                is_anomaly_confirmed = False # Garante que a flag seja desligada imediatamente se o score cair
 
-                    # Adiciona o score na imagem original para display
-                    cv2.putText(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), 
-                                f"Score: {pred_score:.4f}", 
-                                (10, 30), # Posição do texto
-                                cv2.FONT_HERSHEY_SIMPLEX, 
-                                1,        # Tamanho da fonte
-                                (0, 255, 0), # Cor verde (BGR)
-                                2)        # Espessura da linha
+            # 6. Envia a flag de volta para a Raspberry Pi
+            response = b'A' if is_anomaly_confirmed else b'N'
+            sock.sendall(response)
 
-                    combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
+            # Pós-processamento para visualização com OpenCV:
+            anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
+            anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
+                                            (decoded_image.shape[1], decoded_image.shape[0]),
+                                            interpolation=cv2.INTER_LINEAR)
+    
+            # Aplica um mapa de cores (heatmap) para melhor visualização
+            anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
 
-                    # 4. Visualização
-                    cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+            # Salva as imagens
+            timestamp = int(time.time() * 1000)
+            cv2.imwrite(str(inference_dir / f"original_{inference_count:04d}_{timestamp}.jpg"), decoded_image)
+            cv2.imwrite(str(inference_dir / f"anomaly_map_{inference_count:04d}_{timestamp}_{pred_score:.4f}.jpg"), anomaly_map_colored)
+            print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
 
-                    # Saída ao pressionar 'q'
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
-                        break
+            inference_count += 1
 
-                    print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly_confirmed}. Enviando flag...")
+            # Adiciona o score na imagem original para display
+            cv2.putText(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), 
+                        f"Score: {pred_score:.4f}", 
+                        (10, 30), # Posição do texto
+                        cv2.FONT_HERSHEY_SIMPLEX, 
+                        1,        # Tamanho da fonte
+                        (0, 255, 0), # Cor verde (BGR)
+                        2)        # Espessura da linha
 
-                except ConnectionResetError:
-                    print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
-                    break # Sai do loop e espera uma nova conexão
-                except Exception as e:
-                    print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
-                    break
+            combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
 
+            # 4. Visualização
+            cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+
+            # Saída ao pressionar 'q'
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
+                break
+
+            print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly_confirmed}. Enviando flag...")
+
+    except socket.timeout:
+        print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")
+    except ConnectionResetError:
+        print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
+    except Exception as e:
+        print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+    finally:
+        cv2.destroyAllWindows()
+    
 # Abordagem é a mais simples.
 # Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.
 def check_for_anomaly_by_score(pred_score: float, threshold: float = ANOMALY_SCORE) -> bool:

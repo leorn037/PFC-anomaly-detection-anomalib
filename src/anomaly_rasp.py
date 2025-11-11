@@ -7,88 +7,117 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from collect_data import collect_and_split_dataset, setup_camera
-from network import receive_model_from_pc, live_inference_rasp_to_pc, rasp_wait_flag
+from network import receive_model_from_pc, live_inference_rasp_to_pc, pi_socket
 from inference import live_inference_rasp, visualize_imgs
+
+try:
+    from gpiozero import OutputDevice
+    import atexit
+except ImportError:
+    print(f"[{Colors.YELLOW}Aviso{Colors.RESET}] gpiozero não encontrada. Rodando sem suporte a GPIO.")
+    OutputDevice = None # Cria uma classe Falsa para evitar erros
+
+ANOMALY_SIGNAL_PIN = 17 # Linha 1 Coluna 6
+try:
+    anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=True, initial_value=False)
+
+    # Função para garantir que o pino seja desligado ao final do script
+    def cleanup_gpio():
+        anomaly_output.off()
+        print(f"[{Colors.CYAN}GPIO{Colors.RESET}] Sinal LOW garantido no pino {ANOMALY_SIGNAL_PIN} ao finalizar.")
+    atexit.register(cleanup_gpio)
+
+except Exception as e:
+    print(f"[{Colors.RED}GPIO ERROR{Colors.RESET}] Não foi possível configurar o GPIO {ANOMALY_SIGNAL_PIN}: {e}")
+    anomaly_output = None # Se falhar, define como None
+
 
 def main():
     
     print(f"{Colors.GREEN}Iniciando ...{Colors.RESET}")
-    if config["collect"] and (config["network_inference"] or config["receive_model"]): 
-        while True:
-            cmd = rasp_wait_flag(config, expected_command="S")
-            if cmd == "S":
-                break 
-            elif cmd == "M":
-                config["collect"] = False
-                print(f'{Colors.YELLOW}PC esperando treinamento. Ignorando coleta de imagens.{Colors.RESET}')
-                break       # Sai do laço para iniciar próximo bloco
-            time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
+    
+    # --- Configuração do Servidor Único ---
+    conn = None
+    server_sock = None
+    if config["network_inference"] or config["receive_model"] or config["visual_rasp"]:
+        conn, server_sock = pi_socket(config["receive_port"])
+    # --- Fim da Configuração do Servidor ---
 
-    # 1. Prepare dataset:
-    camera = setup_camera(config["collect_img_size"])
-    if config["collect"]: # Novo dataset
-        collect_and_split_dataset(
-            camera,
-            output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
-            time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
-            total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
-            image_size=config["collect_img_size"],
-            pc_ip=config["pc_ip"],
-            pc_port=config["receive_port"]
-        )
-    else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada.'{Colors.RESET}"
+    try:
+        # 1. Prepare dataset:
+        camera = setup_camera(config["collect_img_size"])
+        if config["collect"]: # Novo dataset
+            ret = collect_and_split_dataset(
+                camera,
+                output_base_dir="data",                 # Onde o Anomalib espera encontrar os dados
+                time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
+                total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
+                image_size=config["collect_img_size"],
+                conn = conn,
+            )
+            if ret == "DISCONNECTED": 
+                camera.stop()
+                return True
 
-    if config["network_inference"]:
-        print(f"{Colors.CYAN}Esperando confirmação de treinamento...{Colors.RESET}")
-        while True:
-            cmd = rasp_wait_flag(config, expected_command="M")
-            if cmd == "M":
-                break 
-            elif cmd == "S": return 'restart'
-            time.sleep(1) # Pausa mínima para não sobrecarregar a CPU
+        else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada.'{Colors.RESET}"
 
-    elif config["receive_model"]:
-        start_time = time.time()
-        from models import MODEL_CONFIGS, create_model
-        dict = receive_model_from_pc(config["pi_port"], config["model_output_dir"])
-        receive_model_time = time.time() - start_time
-        
-        config['model_name'] = model_name = dict['model_name']
-        MODEL_CONFIGS[model_name]['params'] = dict['model_params']
-        MODEL_CONFIGS[model_name]['inference_params'] = dict['model_inference_params']
-        config['ckpt_path'] = dict['ckpt_path']
-        print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
-    else: 
-         from models import MODEL_CONFIGS, create_model
-         f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}"
+        if config["receive_model"]:
+            start_time = time.time()
+            from models import MODEL_CONFIGS, create_model
+            dict = receive_model_from_pc(config["pi_port"], config["model_output_dir"])
+            receive_model_time = time.time() - start_time
+            
+            config['model_name'] = model_name = dict['model_name']
+            MODEL_CONFIGS[model_name]['params'] = dict['model_params']
+            MODEL_CONFIGS[model_name]['inference_params'] = dict['model_inference_params']
+            config['ckpt_path'] = dict['ckpt_path']
+            print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
+        else: 
+            from models import MODEL_CONFIGS, create_model
+            f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}"
 
-    if not config["network_inference"]:
-        # 2. Crie o modelo
-        model = create_model(config)
-        if model == None: return
+        if not config["network_inference"]:
+            # 2. Crie o modelo
+            model = create_model(config)
+            if model == None: return
 
-    # --- 6. Verificação e visualização da detecção individual por código ---
-    print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
+        # --- 6. Verificação e visualização da detecção individual por código ---
+        print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 
-    # --- Processar imagens normais ---
+        # --- Processar imagens normais ---
 
-    if config["live"]:
-            if config["network_inference"]: live_inference_rasp_to_pc(camera, config, timeout = 120)
-            else: live_inference_rasp(model, config, camera)
-    else:
-        #normal_dir = dataset_root / "test" / "normal"
-        normal_dir = Path(config["normal_dir"])
-        img_class="Normal"
-        visualize_imgs(normal_dir, model, img_class, config["image_size"])
+        if config["live"]:
+                if config["network_inference"] and conn: 
+                    ret = live_inference_rasp_to_pc(camera, conn, anomaly_output, timeout = 120)
+                    if ret == "DISCONNECTED": 
+                        camera.stop()
+                        return True
+                else: live_inference_rasp(model, config, camera, anomaly_output)
+        else:
+            #normal_dir = dataset_root / "test" / "normal"
+            normal_dir = Path(config["normal_dir"])
+            img_class="Normal"
+            visualize_imgs(normal_dir, model, img_class, config["image_size"])
 
-        # --- Processar imagens anômalas ---
-        abnormal_dir = Path(config["dataset_root"]) / "test" / "abnormal"
-        img_class = "Abnormal"
-        visualize_imgs(abnormal_dir, model, img_class, config["image_size"])
+            # --- Processar imagens anômalas ---
+            abnormal_dir = Path(config["dataset_root"]) / "test" / "abnormal"
+            img_class = "Abnormal"
+            visualize_imgs(abnormal_dir, model, img_class, config["image_size"])
 
-        plt.close('all') 
+            plt.close('all') 
+    except (ConnectionError, BrokenPipeError, ConnectionResetError) as e:
+        print(f"[{Colors.RED}CRÍTICO{Colors.RESET}] Conexão principal perdida: {e}.")
+        return 'restart' # Sinaliza ao main para reiniciar
+    except KeyboardInterrupt:
+        print(f"{Colors.YELLOW}Ctrl+C detectado.{Colors.RESET}")
+    finally:
+        # O main() é o dono dos recursos de rede e os fecha
+        if conn: conn.close()
+        if server_sock: server_sock.close()
+        # A câmera e o GPIO são fechados pelo __main__
 
-
+# TODO: receive_model_from_pc(): websocket e sincronização
+# TODO: live_inference_rasp(): anomaly_output e websocket
 
 if __name__ == "__main__":
     print(f"{Colors.BLUE}Bibliotecas importadas em {time.time()-init_time:.2f} segundos.{Colors.RESET}")
@@ -109,6 +138,9 @@ if __name__ == "__main__":
     os.environ["TIMM_IGNORE_DEPRECATED_WARNINGS"] = "1"
 
     ret = main()
-    while ret == 'restart':
-        ret = main() 
+    while main():
+        print(f"[{Colors.MAGENTA}REINICIANDO O FLUXO PRINCIPAL...{Colors.RESET}")
+        #todo: configs
+        config["collect"] = True
+        time.sleep(5) # Pausa antes de tentar reabrir o servidor
 

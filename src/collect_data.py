@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from utils import Colors
-from network import crop_and_resize
+from network import crop_and_resize, send_tcp_frame
 
 try:
     from picamera2 import Picamera2
@@ -72,8 +72,7 @@ def collect_and_split_dataset(
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
     image_size: int = 640,
-    pc_ip = None,
-    pc_port = None,
+    conn = None,
     ):
     """
     Coleta imagens de uma câmera, as salva temporariamente e as divide
@@ -99,23 +98,34 @@ def collect_and_split_dataset(
     raw_path.mkdir(parents=True, exist_ok=False)
     print(f"{Colors.GREEN}Criando novo diretório de captura em: {raw_path}{Colors.RESET}")
 
-    sock = None
-    if pc_ip and pc_port:
+    if conn:
+        import socket
+
+        print(f"[{Colors.CYAN}Coleta{Colors.RESET}] Aguardando comando de INÍCIO DE COLETA ('S')...")
+        
         try:
-            import socket
-            import pickle
-            import struct
-            print(f"[{Colors.CYAN}Rede{Colors.RESET}] Tentando conectar ao PC em {pc_ip}:{pc_port}...")
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((pc_ip, pc_port))
-            sock.settimeout(time_sample) # Timeout curto para o recv no loop principal
-            print(f"[{Colors.GREEN}Rede{Colors.RESET}] Conexão estabelecida com sucesso.")
-        except (socket.timeout, ConnectionRefusedError):
-            print(f"[{Colors.RED}Rede{Colors.RESET}] Não foi possível conectar ao PC. O envio de imagens e controle remoto estão desativados.")
-            sock = None
-        except Exception as e:
-            print(f"[{Colors.RED}Rede{Colors.RESET}] Erro inesperado ao conectar: {e}")
-            sock = None
+            # Espera (bloqueante) pelo comando 'S' ou 'M'
+            conn.settimeout(None) # Espera indefinidamente pelo comando da fase
+            command_bytes = conn.recv(4)
+            if not command_bytes: raise ConnectionResetError("PC Desconectou")
+            
+            command = command_bytes.decode().strip()
+
+            if command == "P":
+                conn.sendall(b'ACK')
+                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando 'S' recebido. Iniciando coleta.")
+            elif command == "M":
+                conn.sendall(b'ACK')
+                print(f"{Colors.YELLOW}PC pulou coleta (recebido 'M'). Saindo da função.{Colors.RESET}")
+                return  # Sinaliza ao main para pular
+            else:
+                conn.sendall(b'NACK')
+                print(f"[{Colors.RED}SYNC{Colors.RESET}] Dessincronização! Comando '{command}' recebido. Saindo da coleta.")
+                return "DISCONNECTED" # Falha na sincronização
+
+        except (ConnectionResetError, BrokenPipeError, socket.timeout) as e:
+            print(f"[{Colors.RED}Rede{Colors.RESET}] Conexão perdida durante a sincronização: {e}")
+            return "DISCONNECTED"
 
     is_headless = not has_gui()
     if is_headless:
@@ -154,30 +164,26 @@ def collect_and_split_dataset(
             current_time = time.time()
 
             # --- Lógica de Rede (se a conexão existir) ---
-            if sock:
+            if conn:
                 try:
                     # Envia o frame para o PC
-                    _, encoded_image = cv2.imencode('.jpg', frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-                    data = pickle.dumps(encoded_image)
-                    message_size = struct.pack("!I", len(data))
-                    sock.sendall(message_size + data)
+                    send_tcp_frame(conn, frame_bgr)
 
                     # Tenta receber um comando do PC de forma não-bloqueante
                     try:
-                        command = sock.recv(16).decode().strip()
-                        if command == "START_SAVE":
+                        command = conn.recv(4).decode().strip()
+                        if command == "C":
                             saving = True
                             saved_auto_count = 0
                             print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Iniciando salvamento automático por comando do PC.")
-                        elif command == "STOP_SAVE":
+                        elif command == "Q":
                              saving = False
                              print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Parando salvamento por comando do PC.")
                     except socket.timeout:
                         pass # Continua se não houver dados para receber
                 except (ConnectionError, BrokenPipeError) as e:
-                    print(f"[{Colors.RED}Rede{Colors.RESET}] Erro de conexão: {e}. Desativando o streaming.")
-                    sock.close()
-                    sock = None
+                    print(f"[{Colors.RED}Rede{Colors.RESET}] Erro de conexão no stream: {e}.")
+                    return "DISCONNECTED"
 
             # --- Lógica de Salvamento ---
             # Lógica para captura automática de imagens
@@ -218,10 +224,6 @@ def collect_and_split_dataset(
                 total_frames_to_collect = -1 # Garante que a condição 'saved_auto_count < total_frames_to_collect' seja falsa
                 break
     finally:
-        # --- DESLIGAMENTO SEGURO DA THREAD ---
-        if sock:
-            sock.close()
-            print(f"{Colors.CYAN}Conexão de rede encerrada.{Colors.RESET}")
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()

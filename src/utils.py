@@ -14,15 +14,13 @@ class Colors:
 
 CONFIG = {
     # Rede
-    "receive_port": 5007,      # Porta para receber imagens
-    "pi_port": 5008,           # Porta para enviar o modelo
+    "pi_port": 5008,           # Porta para a Raspberry
     "pi_ip": "raspberrypi",   # IP da Raspberry Pi
-    "pc_ip": "leorn037-ACER.local", #"leorn037-ACER",   # IP do PC
 
     # Coleta de Imagens
     "collect" : True, # Coleta de Imagens pela Rasp para treinamento
     "time_sample" : 0.2,
-    "img_n" : 100,
+    "img_n" : 150,
     "collect_img_size": 640,
 
     # Recebimento do modelo pela rasp
@@ -34,9 +32,9 @@ CONFIG = {
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Teste',
-    "normal_dir": "data/normal", # Imagens normais para treinamento
-    "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
-    "normal_test_dir": "data/test", # Imagens normais para teste
+    "normal_dir": 'img_barra_nor', #"data/normal", # Imagens normais para treinamento
+    "abnormal_test_dir": "img_barra_abn", #"data/abnormal", # Imagens anômalas para teste
+    "normal_test_dir": "img_barra_abn", #"data/test", # Imagens normais para teste
 
     # Model configs
     "model_name": 'PatchCore',
@@ -47,8 +45,8 @@ CONFIG = {
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
 
     # Visualização
-    "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas
-    "websocket" : True, # Envio de imagens via websocket da Raspberry para o PC
+    "live" : False, # Inferência em tempo real, False: Inferência em imagens salvas
+    "visual_rasp" : False, # Envio de imagens via websocket da Raspberry para o PC
 }
 
 import argparse
@@ -143,7 +141,7 @@ def print_config_summary(config: dict, mode: str = "rasp"):
     if mode == "rasp":
         keys_to_show = [
             "pc_ip", "collect", "time_sample", "img_n", 
-            "receive_model", "network_inference", "websocket"
+            "receive_model", "network_inference", "visual_rasp"
             ]
     else: 
         keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "network_inference" ]

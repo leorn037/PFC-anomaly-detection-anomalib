@@ -114,8 +114,73 @@ def crop_and_resize(
     else:
         return cropped_frame
 
+def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 70):
+    """
+    Codifica (JPEG), serializa (pickle) e envia um frame (com cabeçalho de tamanho)
+    através de um socket TCP.
+
+    Levanta uma exceção (BrokenPipeError, etc.) se a conexão falhar.
+
+    Args:
+        sock (socket.socket): O socket de conexão TCP ativo.
+        frame (np.ndarray): O frame de imagem (array NumPy BGR) a ser enviado.
+        quality (int): A qualidade do JPEG (0-100).
+    """
+    if not sock:
+        # Se a rede estiver desabilitada (sock is None), não faz nada.
+        return
+
+    # 1. Codifica o frame em formato JPEG para compressão
+    # Isso reduz o tamanho da imagem antes de enviar pela rede.
+    _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    
+    # 2. Serializa os dados (pickle)
+    # Converte o array NumPy da imagem codificada em um fluxo de bytes.
+    data = pickle.dumps(encoded_image)
+    
+    # 3. Prepara o cabeçalho de tamanho (4 bytes, unsigned int)
+    # Isso informa ao receptor (PC) exatamente quantos bytes ele deve esperar.
+    message_size = struct.pack("!I", len(data))
+    
+    # 4. Envia o tamanho da mensagem (cabeçalho) + os dados (payload)
+    # sendall garante que todos os bytes sejam enviados.
+    sock.sendall(message_size + data)
+
+def pi_socket(pi_port):
+    # Se a rede estiver habilitada, a Pi atua como Servidor
+    try:
+        host = '0.0.0.0'
+        port = pi_port
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_sock.bind((host, port))
+        server_sock.listen(1)
+        
+        print(f"[{Colors.CYAN}Servidor{Colors.RESET}] Aguardando conexão do PC em {host}:{port}...")
+        conn, addr = server_sock.accept()
+        print(f"[{Colors.GREEN}Servidor{Colors.RESET}] Conexão estabelecida com {addr}.")
+        return conn, server_sock
+    except Exception as e:
+        print(f"[{Colors.RED}Erro{Colors.RESET}] Falha ao iniciar o servidor: {e}. Rodando em modo Offline.")
+        return None, None
+
+def pi_connect(pi_ip, pi_port):
+        
+        while True: # Loop de retry da conexão principal
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2.0) # Timeout para a tentativa de conexão
+                print(f"[{Colors.CYAN}Rede-PC{Colors.RESET}] Conectando à Pi em {pi_ip}:{pi_port}...")
+                sock.connect((pi_ip, pi_port))
+                print(f"[{Colors.GREEN}Rede-PC{Colors.RESET}] Conexão principal estabelecida.")
+                return sock # Sucesso, sai do loop de retry
+            except (ConnectionRefusedError, socket.timeout) as e:
+                print(f"[{Colors.RED}Rede-PC{Colors.RESET}] Falha ao conectar ({e}). A Pi está escutando? Tentando novamente em 5s...")
+                time.sleep(3)
+                return None
+
 # Função para receber todas as imagens e salvar
-def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
+def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.socket):
     """
     Recebe um número específico de imagens via TCP, decodifica e salva em um diretório.
     
@@ -126,89 +191,103 @@ def receive_all_images_and_save(num_images: int, save_path: Path, pc_port: int):
     """
     save_path.mkdir(parents=True, exist_ok=True)
     
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-        server_sock.bind(('0.0.0.0', pc_port))
-        server_sock.listen(1)
+    # --- ETAPA 1: Sincronização (Lógica da antiga 'send_command_and_wait_ack') ---
+    
+    if not sock:
+        print(f"[{Colors.RED}Erro{Colors.RESET}] Conexão de rede não estabelecida. Abortando coleta.")
+        return
+    
+    command = "P"
+    ack_received = False
+    while not ack_received:
+        try:
+            print(f"[{Colors.CYAN}SYNC-PC{Colors.RESET}] Enviando comando '{command}' para a Pi...")
+            sock.sendall(command.encode('utf-8'))
+            
+            sock.settimeout(10.0) # Timeout para a resposta ACK
+            response = sock.recv(16).decode().strip()
+            
+            if response == "ACK":
+                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
+                ack_received = True
+            else:
+                print(f"[{Colors.YELLOW}SYNC{Colors.RESET}] Resposta inválida da Pi: {response}. ")
+                time.sleep(3)
+
+        except (ConnectionRefusedError, socket.timeout) as e:
+            print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Falha na conexão ao sincronizar 'P': {e}")
+        except Exception as e:
+            print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Erro inesperado: {e}")
+            return
+
+    print(f"{Colors.GREEN}Recebendo {num_images} imagens...{Colors.RESET}")
+    print(f"{Colors.GREEN}Pressione '{Colors.CYAN}c{Colors.RESET}' para iniciar a coleta de {num_images} imagens.{Colors.RESET}")
+    print(f"{Colors.GREEN}Pressione '{Colors.CYAN}q{Colors.RESET}' para finalizar.{Colors.RESET}")
+
+    saving = False
+    img_count = 0
+
+    while True:
+        try:
+            # Recebe o tamanho da mensagem
+            message_size_data = sock.recv(4)
+            if not message_size_data: 
+                print(f"[{Colors.YELLOW}Coleta-PC{Colors.RESET}] Stream encerrado pela Pi.")
+                break
+            message_size = struct.unpack("!I", message_size_data)[0]
+
+            # Recebe os dados
+            data = b''
+            while len(data) < message_size:
+                packet = sock.recv(message_size - len(data))
+                if not packet: break
+                data += packet
+            
+            # Decodifica e salva a imagem
+            encoded_image = pickle.loads(data)
+            decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+
+            if decoded_image is None: continue
+            
+            # Exibe a imagem
+            cv2.imshow("Recepção de Imagens", decoded_image)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('c') and not saving:
+                # Envia o comando para a Pi começar a salvar
+                sock.sendall(b'C')
+                saving = True
+                print(f"[{Colors.GREEN}Coleta-PC{Colors.RESET}] Iniciando salvamento de {num_images} imagens.")
+            elif key == ord('q'):
+                print(f"{Colors.YELLOW}Saindo...{Colors.RESET}")
+                try: sock.sendall(b'Q')
+                except Exception: pass
+                break
+
+            # Lógica de salvamento, agora controlada pela flag `saving`
+            if saving and img_count < num_images:
+                filename = save_path / f"img_{img_count:04d}.jpg"
+                cv2.imwrite(str(filename), decoded_image)
+                img_count += 1
+                print(f"{Colors.GREEN}Salvo {img_count}/{num_images}{Colors.RESET}")
+
+                if img_count >= num_images:
+                    sock.sendall(b'Q') # Envia 'Q' para parar o salvamento na Pi
+                    print(f"{Colors.YELLOW}Coleta finalizada ({num_images} imagens salvas){Colors.RESET}")
+                    saving = False  # Para de salvar
+                    break
         
-        start_time = time.time()
-        print(f"{Colors.BLUE}Aguardando conexão da Raspberry Pi em 0.0.0.0:{pc_port}...{Colors.RESET}")
-        conn, addr = server_sock.accept()
-        
-        with conn:
-            # --- Configuração do socket para não bloquear ---
-            conn.settimeout(0.01) # Timeout muito curto para não travar
+        except socket.timeout:
+            print(f"[{Colors.YELLOW}Timeout{Colors.RESET}] A Pi parou de enviar frames. Encerrando coleta.")
+            break
+        except (ConnectionResetError, BrokenPipeError):
+            print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
+            break
+        except Exception as e:
+            print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+            break
 
-            connection_time = time.time() - start_time
-            print(f"{Colors.GREEN}Conexão aceita de {addr} em {connection_time:.2f} segundos. Recebendo {num_images} imagens...{Colors.RESET}")
-            print(f"{Colors.GREEN}Pressione '{Colors.CYAN}c{Colors.RESET}' para iniciar a coleta de {num_images} imagens.{Colors.RESET}")
-            print(f"{Colors.GREEN}Pressione '{Colors.CYAN}q{Colors.RESET}' para finalizar.{Colors.RESET}")
-
-            saving = False
-            img_count = 0
-
-            while True:
-                try:
-                    # Recebe o tamanho da mensagem
-                    message_size_data = conn.recv(4)
-                    if not message_size_data: break
-                    message_size = struct.unpack("!I", message_size_data)[0]
-
-                    # Recebe os dados
-                    data = b''
-                    while len(data) < message_size:
-                        packet = conn.recv(message_size - len(data))
-                        if not packet: break
-                        data += packet
-                    
-                    # Decodifica e salva a imagem
-                    encoded_image = pickle.loads(data)
-                    decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
-
-                    if decoded_image is None:
-                        continue
-                    
-                    # Exibe a imagem
-                    cv2.imshow("Recepção de Imagens", decoded_image)
-
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord('c') and not saving:
-                        # Envia o comando para a Pi começar a salvar
-                        conn.sendall(b'START_SAVE')
-                        saving = True
-                        print(f"{Colors.YELLOW}Comando 'START_SAVE' enviado. Iniciando salvamento local.{Colors.RESET}")
-                    elif key == ord('q'):
-                        print(f"{Colors.YELLOW}Saindo...{Colors.RESET}")
-                        break
-
-                    # Lógica de salvamento, agora controlada pela flag `saving`
-                    if saving and img_count < num_images:
-                        filename = save_path / f"img_{img_count:04d}.jpg"
-                        cv2.imwrite(str(filename), decoded_image)
-                        img_count += 1
-                        print(f"{Colors.GREEN}Salvo {img_count}/{num_images}{Colors.RESET}")
-
-                        if img_count >= num_images:
-                            print(f"{Colors.YELLOW}Coleta finalizada ({num_images} imagens salvas){Colors.RESET}")
-                            saving = False  # Para de salvar
-                            break
-                
-                except socket.timeout:
-                    continue
-                except (ConnectionResetError, BrokenPipeError):
-                    print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
-                    break
-                except Exception as e:
-                    print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
-                    break
-
-                except (ConnectionResetError, BrokenPipeError):
-                    print(f"{Colors.RED}Conexão com a Raspberry Pi encerrada. Encerrando...{Colors.RESET}")
-                    break
-                except Exception as e:
-                    print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
-                    break
-
-            cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
 
 # Função para enviar o modelo
 def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
@@ -358,7 +437,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 "ckpt_path": str(file_path)
             }
 
-def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
+def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
     """
     Captura frames, envia para um PC para inferência e recebe o resultado.
 
@@ -369,90 +448,80 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
         image_size (int): Tamanho da imagem para captura.
         timeout (int): Tempo máximo em segundos para esperar pela resposta do PC.
     """
-    from gpiozero import OutputDevice # Usamos OutputDevice para um pino digital
-    import atexit # Usado para garantir que o pino seja desligado ao sair
 
-    ANOMALY_SIGNAL_PIN = 17 # Linha 1 Coluna 6
-    try:
-        anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=True, initial_value=False)
+    if conn:
+        print(f"[{Colors.CYAN}Coleta{Colors.RESET}] Aguardando comando de INÍCIO DA INFERÊNCIA ('M')...")
 
-        # Função para garantir que o pino seja desligado ao final do script
-        def cleanup_gpio():
-            anomaly_output.off()
-            print(f"[{Colors.CYAN}GPIO{Colors.RESET}] Sinal LOW garantido no pino {ANOMALY_SIGNAL_PIN} ao finalizar.")
-        atexit.register(cleanup_gpio)
-
-    except Exception as e:
-        print(f"[{Colors.RED}GPIO ERROR{Colors.RESET}] Não foi possível configurar o GPIO {ANOMALY_SIGNAL_PIN}: {e}")
-        anomaly_output = None # Se falhar, define como None
-
-    pc_ip = config["pc_ip"]
-    pc_port = config["receive_port"]
-
-    print(f"{Colors.GREEN}Conectando ao servidor no PC ({pc_ip}:{pc_port})...{Colors.RESET}")
-    
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(timeout) # Define um timeout para as operações de socket
-            sock.connect((pc_ip, pc_port))
-            print(f"{Colors.GREEN}Conexão estabelecida com sucesso. Pressione 'Ctrl+C' para sair.{Colors.RESET}")
-            picam2.start()
+        try:
+            conn.settimeout(None) # Espera indefinidamente pelo comando da fase
+            command_bytes = conn.recv(4)
+            if not command_bytes: raise ConnectionResetError("PC Desconectou")
             
-            while True:
-                # 1. Captura o frame da câmera
-                frame = picam2.capture_array()
-                frame = crop_and_resize(frame, 
-                                        size=None)
+            command = command_bytes.decode().strip()
 
-                
-                # 2. Codifica e serializa o frame
-                _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-                data = pickle.dumps(encoded_image)
-                message_size = struct.pack("!I", len(data))
-                
-                start_time = time.time()
-                
-                # 3. Envia o tamanho da mensagem e os dados
-                sock.sendall(message_size + data)
-                
-                # 4. Espera a resposta do PC
-                try:
-                    response_flag_bytes = sock.recv(1)
-                    if not response_flag_bytes:
-                        print(f"{Colors.YELLOW}Conexão encerrada pelo PC.{Colors.RESET}")
-                        break
-                        
-                    is_anomaly = response_flag_bytes == b'\x01'
-                    end_time = time.time()
-                    
-                    status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
-                    
-                    if anomaly_output is None:
-                        # Se a inicialização falhou (por exemplo, falta de permissão ou pino inválido), apenas imprime
-                        print(f"[{Colors.YELLOW}GPIO{Colors.RESET}] Aviso: Sinal não enviado (Inicialização do pino falhou).")
-                    elif is_anomaly:
-                        anomaly_output.on() # Define o pino para HIGH (3.3V)
-                        print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino {ANOMALY_SIGNAL_PIN}.")
-                    else:
-                        anomaly_output.off() # Define o pino para LOW (0V)
-                        print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino {ANOMALY_SIGNAL_PIN}.")
+            if command == "M":
+                conn.sendall(b'ACK')
+                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Comando 'M' recebido. Iniciando inferência.")
+            else:
+                conn.sendall(b'NACK')
+                print(f"[{Colors.RED}SYNC{Colors.RESET}] Dessincronização! Comando '{command}' recebido. Saindo da coleta.")
+                return "DISCONNECTED" # Falha na sincronização
+        except (ConnectionResetError, BrokenPipeError, socket.timeout) as e:
+            print(f"[{Colors.RED}Rede{Colors.RESET}] Conexão perdida durante a sincronização: {e}")
+            return "DISCONNECTED"
 
+    try:        
+        picam2.start()
+            
+        while True:
+            # 1. Captura o frame da câmera
+            frame = picam2.capture_array()
+            frame = crop_and_resize(frame, 
+                                    size=None)
 
-                    print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
-                
-                except socket.timeout:
-                    print(f"{Colors.YELLOW}Tempo limite de {timeout}s excedido. O PC não respondeu.{Colors.RESET}")
-                    continue
-                
-                except Exception as e:
-                    print(f"{Colors.RED}Erro durante a comunicação: {e}. Encerrando...{Colors.RESET}")
+            start_time = time.time()
+
+            send_tcp_frame(conn, frame)
+            
+            # 4. Espera a resposta do PC
+            conn.settimeout(0.2) # Define um timeout longo para a resposta
+            try:
+                response_bytes = conn.recv(1)
+                if not response_bytes:
+                    print(f"{Colors.YELLOW}Conexão encerrada pelo PC.{Colors.RESET}")
                     break
+                
+                if response_bytes not in (b'A', b'N'):
+                    print(f"[{Colors.RED}Dessincronização!{Colors.RESET}] Resposta inválida recebida do PC: {response_bytes}")
+                    print(f"[{Colors.RED}Erro{Colors.RESET}] O PC pode estar em uma fase diferente. Encerrando inferência.")
+                    return 'DISCONNECTED'
+                
+                if response_bytes == b'Q': return None
+        
+                is_anomaly = response_bytes == b'A'
+                end_time = time.time()
+                
+                status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
+                
+                if anomaly_output is None:
+                    # Se a inicialização falhou (por exemplo, falta de permissão ou pino inválido), apenas imprime
+                    print(f"[{Colors.YELLOW}GPIO{Colors.RESET}] Aviso: Sinal não enviado (Inicialização do pino falhou).")
+                elif is_anomaly:
+                    anomaly_output.on() # Define o pino para HIGH (3.3V)
+                    print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino GPIO {anomaly_output.pin.number}.")
+                else:
+                    anomaly_output.off() # Define o pino para LOW (0V)
+                    print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino GPIO {anomaly_output.pin.number}.")
 
-                finally:
-                    # Garante que a porta serial seja fechada ao sair
-                    if ser:
-                        ser.close()
-                        print(f"[{Colors.CYAN}Serial{Colors.RESET}] Porta serial fechada.")
+                print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
+            
+            except socket.timeout:
+                print(f"{Colors.YELLOW}Tempo limite excedido. O PC não respondeu.{Colors.RESET}")
+                continue
+            
+            except Exception as e:
+                print(f"{Colors.RED}Erro durante a comunicação: {e}. Encerrando...{Colors.RESET}")
+                return "DISCONNECTED"
     
     except ConnectionRefusedError:
         print(f"{Colors.RED}Erro: Conexão recusada. O servidor no PC {pc_ip} não está online ou a porta {pc_port}está incorreta.{Colors.RESET}")
@@ -460,81 +529,6 @@ def live_inference_rasp_to_pc(picam2, config, timeout: int = 120, ser = None):
         print(f"{Colors.RED}Erro: Tempo limite excedido ao tentar conectar ao PC.{Colors.RESET}")
     except KeyboardInterrupt:
         print(f"{Colors.YELLOW}Ctrl+C detectado. Encerrando...{Colors.RESET}")
-    finally:
-        picam2.stop()
-        print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")
-
-def rasp_wait_flag(config, expected_command="S"):
-    """
-    Aguarda a conexão do PC e recebe um comando específico. 
-    Se a conexão falhar ou o comando for incorreto, tenta novamente (retry).
-    """
-    host = '0.0.0.0'
-    port = config["receive_port"]
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            server.bind((host, port))
-            server.listen(1)
-            print(f"Aguardando comando do PC em {host}:{port}...")
-            conn, addr = server.accept()
-            with conn:
-                # Recebe o comando
-                command_bytes = conn.recv(4)
-                if not command_bytes:
-                    raise ConnectionResetError("Conexão fechada pelo PC.")
-                
-                command = command_bytes.decode().strip()
-
-                print(f"[{Colors.YELLOW}SYNC{Colors.RESET}] Comando '{command}' recebido.")
-                
-                if command == expected_command:
-                    conn.sendall(b'ACK')
-                    return command  # ou True, conforme seu fluxo
-                else:
-                    conn.sendall(b'NACK')
-                    print(f"[{Colors.RED}SYNC{Colors.RESET}] Comando inesperado '{command}', aguardando '{expected_command}'.")
-                    return command
-    
-        return None
-    except (ConnectionResetError, ConnectionRefusedError) as e:
-        print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro de conexão ({e}). Tentando novamente...")
-        return None
-    except Exception as e:
-        print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro: {e}")
-        return None
-
-def send_flag(config, command="S"):
-    """
-    Envia um comando de flag para a Pi e espera pela confirmação (ACK).
-    
-    Isso é usado para sincronizar as fases de treinamento/inferência.
-    """
-    pi_ip = config["pi_ip"]
-    port = config["receive_port"]
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            # Conecta à Pi (que está no modo listen temporário)
-            sock.connect((pi_ip, port))
-            
-            # Envia o comando
-            print(f"[{Colors.CYAN}SYNC{Colors.RESET}] Enviando '{command}' para Pi em {pi_ip}:{port} ...")
-            sock.sendall(command.encode('utf-8'))
-            
-            # Espera a resposta ACK
-            response = sock.recv(16).decode().strip()
-            
-            if response == "ACK":
-                print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
-                return True
-            else:
-                print(f"[{Colors.YELLOW}SYNC{Colors.RESET}] Resposta inválida da Pi: {response}. ")
-
-    except (ConnectionRefusedError, socket.timeout) as e:
-        print(f"[{Colors.RED}SYNC{Colors.RESET}] Falha na conexão ou timeout: {e}")
-    except Exception as e:
-        print(f"[{Colors.RED}SYNC{Colors.RESET}] Erro inesperado no envio: {e}")        
-    
-    return False
 
 def receive_and_process_data():
     """
