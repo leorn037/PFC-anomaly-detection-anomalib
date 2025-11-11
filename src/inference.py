@@ -395,7 +395,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             print(f"[{Colors.CYAN}SYNC-PC{Colors.RESET}] Enviando comando '{command}' para a Pi...")
             sock.sendall(command.encode('utf-8'))
             
-            sock.settimeout(10.0) # Timeout para a resposta ACK
+            sock.settimeout(None) # Timeout para a resposta ACK
             response = sock.recv(16).decode().strip()
             
             if response == "ACK":
@@ -503,6 +503,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             break
         except Exception as e:
             print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+            raise e
             break
             
     cv2.destroyAllWindows()

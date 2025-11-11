@@ -174,7 +174,7 @@ def pi_connect(pi_ip, pi_port):
                 sock.connect((pi_ip, pi_port))
                 print(f"[{Colors.GREEN}Rede-PC{Colors.RESET}] Conexão principal estabelecida.")
                 return sock # Sucesso, sai do loop de retry
-            except (ConnectionRefusedError, socket.timeout) as e:
+            except (ConnectionRefusedError, socket.timeout, socket.gaierror) as e:
                 print(f"[{Colors.RED}Rede-PC{Colors.RESET}] Falha ao conectar ({e}). A Pi está escutando? Tentando novamente em 5s...")
                 time.sleep(3)
 
@@ -484,7 +484,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
             send_tcp_frame(conn, frame)
             
             # 4. Espera a resposta do PC
-            conn.settimeout(0.2) # Define um timeout longo para a resposta
+            conn.settimeout(120) 
             try:
                 response_bytes = conn.recv(1)
                 if not response_bytes:

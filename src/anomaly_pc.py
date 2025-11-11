@@ -37,6 +37,7 @@ def main():
         # --- Passo 3: Enviar o modelo treinado para a Raspberry Pi ---
         # Encontre o caminho do checkpoint mais recente
         results_path = Path("results") / config["model_name"] / config["folder_name"]
+        print(results_path)
         model_path = get_latest_checkpoint(results_path)
 
         if model_path and config["receive_model"] and config["live"]:
