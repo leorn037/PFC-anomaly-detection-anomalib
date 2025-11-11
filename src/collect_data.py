@@ -182,7 +182,7 @@ def collect_and_split_dataset(
                              print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Parando salvamento por comando do PC.")
                     except socket.timeout:
                         pass # Continua se não houver dados para receber
-                except (ConnectionError, BrokenPipeError) as e:
+                except (ConnectionError, BrokenPipeError, socket.timeout) as e:
                     print(f"[{Colors.RED}Rede{Colors.RESET}] Erro de conexão no stream: {e}.")
                     return "DISCONNECTED"
 
