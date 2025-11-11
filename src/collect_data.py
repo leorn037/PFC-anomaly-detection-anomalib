@@ -104,9 +104,9 @@ def collect_and_split_dataset(
         print(f"[{Colors.CYAN}Coleta{Colors.RESET}] Aguardando comando de INÍCIO DE COLETA ('P')...")
         
         try:
-            # Espera (bloqueante) pelo comando 'S' ou 'M'
+            # Espera (bloqueante) pelo comando 'P' ou 'M'
             conn.settimeout(None) # Espera indefinidamente pelo comando da fase
-            command_bytes = conn.recv(4)
+            command_bytes = conn.recv(1)
             if not command_bytes: raise ConnectionResetError("PC Desconectou")
             
             command = command_bytes.decode().strip()
@@ -172,7 +172,7 @@ def collect_and_split_dataset(
 
                     # Tenta receber um comando do PC de forma não-bloqueante
                     try:
-                        command = conn.recv(4).decode().strip()
+                        command = conn.recv(1).decode().strip()
                         if command == "C":
                             saving = True
                             saved_auto_count = 0
@@ -180,9 +180,12 @@ def collect_and_split_dataset(
                         elif command == "Q":
                              saving = False
                              print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Parando salvamento por comando do PC.")
+                             break
                     except socket.timeout:
                         pass # Continua se não houver dados para receber
-                except (ConnectionError, BrokenPipeError, socket.timeout) as e:
+                except socket.timeout:
+                    pass # Continua se não houver dados para receber
+                except (ConnectionError, BrokenPipeError) as e:
                     print(f"[{Colors.RED}Rede{Colors.RESET}] Erro de conexão no stream: {e}.")
                     return "DISCONNECTED"
 
