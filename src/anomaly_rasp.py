@@ -56,6 +56,8 @@ def main(camera):
             )
             if ret == "DISCONNECTED":
                 camera.stop()
+                if conn: conn.close()
+                if server_sock: server_sock.close()
                 return True
 
         else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada.'{Colors.RESET}"
@@ -90,6 +92,8 @@ def main(camera):
                     ret = live_inference_rasp_to_pc(camera, conn, anomaly_output)
                     if ret == "DISCONNECTED": 
                         camera.stop()
+                        if conn: conn.close()
+                        if server_sock: server_sock.close()
                         return True
                 else: live_inference_rasp(model, config, camera, anomaly_output)
         else:
@@ -140,7 +144,6 @@ if __name__ == "__main__":
 
     while main(camera):
         print(f"[{Colors.MAGENTA}REINICIANDO O FLUXO PRINCIPAL...{Colors.RESET}")
-        #todo: configs
         config["collect"] = True
         time.sleep(5) # Pausa antes de tentar reabrir o servidor
 

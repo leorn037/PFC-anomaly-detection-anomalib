@@ -29,7 +29,7 @@ CONFIG = {
 
     # Dataset configs
     "dataset_root": './data',
-    "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
+    "image_size": 320, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Teste',
     "normal_dir": "data/normal", # Imagens normais para treinamento
