@@ -113,9 +113,9 @@ def main(camera):
         print(f"{Colors.YELLOW}Ctrl+C detectado.{Colors.RESET}")
     finally:
         # O main() é o dono dos recursos de rede e os fecha
+        print("Finalizando")
         if conn: conn.close()
         if server_sock: server_sock.close()
-        camera.stop()
 
 # TODO: receive_model_from_pc(): websocket e sincronização
 # TODO: live_inference_rasp(): anomaly_output e websocket

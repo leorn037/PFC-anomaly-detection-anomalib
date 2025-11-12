@@ -171,7 +171,7 @@ def collect_and_split_dataset(
                     conn.settimeout(None)
                     send_tcp_frame(conn, frame_bgr)
                     conn.settimeout(time_sample)
-                    
+
                     # Tenta receber um comando do PC de forma não-bloqueante
                     try:
                         command = conn.recv(1).decode().strip()
@@ -233,7 +233,7 @@ def collect_and_split_dataset(
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()
-        elif hasattr(camera, 'stop'):
+        elif hasattr(camera, 'stop') and not conn:
             # Se for a câmera da Raspberry Pi, use stop()
             print(f"{Colors.CYAN}Desligando câmera...{Colors.RESET}")
             camera.stop()

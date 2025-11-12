@@ -473,21 +473,24 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
             print(f"[{Colors.RED}Rede{Colors.RESET}] Conexão perdida durante a sincronização: {e}")
             return "DISCONNECTED"
 
-    try:        
+    try:
+        print(1)        
         picam2.start()
-            
+        print(2)
         while True:
             # 1. Captura o frame da câmera
+            print(3)
             frame = picam2.capture_array()
             frame = crop_and_resize(frame, 
                                     size=None)
-
+            print(4)
             start_time = time.time()
 
             send_tcp_frame(conn, frame)
-            
+            print(5)
             # 4. Espera a resposta do PC
-            conn.settimeout(120) 
+            conn.settimeout(120)
+            print(6)
             try:
                 response_bytes = conn.recv(1)
                 if not response_bytes:
