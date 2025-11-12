@@ -496,7 +496,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
                     print(f"[{Colors.RED}Erro{Colors.RESET}] O PC pode estar em uma fase diferente. Encerrando inferência.")
                     return 'DISCONNECTED'
                 
-                if response_bytes == b'Q': return None
+                if response_bytes == b'Q': return print("Q")
         
                 is_anomaly = response_bytes == b'A'
                 end_time = time.time()
