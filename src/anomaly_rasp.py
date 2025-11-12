@@ -55,7 +55,6 @@ def main(camera):
                 conn = conn,
             )
             if ret == "DISCONNECTED":
-                camera.stop()
                 if conn: conn.close()
                 if server_sock: server_sock.close()
                 return True
@@ -91,7 +90,6 @@ def main(camera):
                 if config["network_inference"] and conn: 
                     ret = live_inference_rasp_to_pc(camera, conn, anomaly_output)
                     if ret == "DISCONNECTED": 
-                        camera.stop()
                         if conn: conn.close()
                         if server_sock: server_sock.close()
                         return True
@@ -142,8 +140,11 @@ if __name__ == "__main__":
 
     camera = setup_camera(config["collect_img_size"])
 
-    while main(camera):
-        print(f"[{Colors.MAGENTA}REINICIANDO O FLUXO PRINCIPAL...{Colors.RESET}")
-        config["collect"] = True
-        time.sleep(5) # Pausa antes de tentar reabrir o servidor
+    try:
+        while main(camera):
+            print(f"[{Colors.MAGENTA}REINICIANDO O FLUXO PRINCIPAL...{Colors.RESET}")
+            config["collect"] = True
+            time.sleep(5) # Pausa antes de tentar reabrir o servidor
+    finally:
+        camera.stop()
 
