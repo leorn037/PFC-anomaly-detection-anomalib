@@ -28,8 +28,8 @@ def crop_and_resize(
     h, w, _ = frame_bgr.shape
 
     # --- LIMITES RÍGIDOS PARA AS COORDENADAS X ---
-    X_MIN_ALLOWED = 214
-    X_MAX_ALLOWED = 437
+    X_MIN_ALLOWED = 250 #214
+    X_MAX_ALLOWED = 392 #437
     Y_CUT = 0
     
     # 1. Pré-processamento: Tons de Cinza
@@ -95,9 +95,12 @@ def crop_and_resize(
 
     # Verifica se os limites se cruzaram após o clamping
     if borda_esquerda >= borda_direita:
-         print(f"[ERRO] Limites de Clamping se cruzaram! Usando limites seguros: ({X_MIN_ALLOWED}, {X_MAX_ALLOWED})")
-         borda_esquerda = X_MIN_ALLOWED
-         borda_direita = X_MAX_ALLOWED
+        print(f"[ERRO] Limites de Clamping se cruzaram! Usando limites seguros: ({X_MIN_ALLOWED}, {X_MAX_ALLOWED})")
+        borda_esquerda = X_MIN_ALLOWED
+        borda_direita = X_MAX_ALLOWED
+
+    borda_esquerda = X_MIN_ALLOWED
+    borda_direita = X_MAX_ALLOWED
 
     center_x = (borda_esquerda + borda_direita) // 2
 
