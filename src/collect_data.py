@@ -151,6 +151,7 @@ def collect_and_split_dataset(
     saving = False
 
     try:
+        if hasattr(camera, 'start'): camera.start()
         while True:
             # Captura a imagem da câmera
             frame_bgr = get_frame(camera,image_size)
@@ -233,7 +234,7 @@ def collect_and_split_dataset(
         if isinstance(camera, cv2.VideoCapture):
             # Se for a câmera do PC, use release()
             camera.release()
-        elif hasattr(camera, 'stop') and not conn:
+        elif hasattr(camera, 'stop'):
             # Se for a câmera da Raspberry Pi, use stop()
             print(f"{Colors.CYAN}Desligando câmera...{Colors.RESET}")
             camera.stop()
