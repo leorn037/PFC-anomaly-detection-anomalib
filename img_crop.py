@@ -104,28 +104,44 @@ def centralizar_cabo_dinamicamente(
     h, w, _ = frame_bgr.shape
 
     # --- LIMITES RÍGIDOS PARA AS COORDENADAS X ---
-    X_MIN_ALLOWED = 120 #214
-    X_MAX_ALLOWED = 420 #437
+    X_MIN_ALLOWED = 250 #214
+    X_MAX_ALLOWED = 400 #437
     Y_CUT = 0
+
+    # Reduz a altura da análise para ignorar o chão e o topo (ROI Vertical)
+    Y_START_ROI = int(h * 0.2) 
+    Y_END_ROI = int(h * 0.8)
     
+    # 3. Encontrar Picos (Bordas)
+    PEAK_HEIGHT_THRESHOLD = 60_000 
+    PEAK_MIN_DISTANCE = 30
+    MIN_CABLE_WIDTH = 125
+
+    frame_roi = frame_bgr[Y_START_ROI:Y_END_ROI, :]
+    # 60_000 k_size 5 frame_roi
+    # 15_000 k_size 3 frame_bgr
+
     # 1. Pré-processamento: Tons de Cinza
-    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(frame_roi, cv2.COLOR_BGR2GRAY)
+
+    # Criamos um retângulo largo e baixo. Ele vai "borrar" tudo que estiver perto na horizontal, fechando os buracos entre os fios do cabo.
+    # (15, 3) significa 15 pixels de largura por 3 de altura.
+    kernel_morph = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
+
+    # O 'Morph Close' é uma Dilatação seguida de Erosão. Ele preenche vazios escuros.
+    morph = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel_morph)
 
     # 2. Suavização para reduzir ruído (Gaussian Blur é bom para isso)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0) # Ajuste o tamanho do kernel se necessário
+    blurred = cv2.GaussianBlur(morph, (5, 5), 0) # Ajuste o tamanho do kernel se necessário
     
     # 3. Detecção de Bordas Verticais (Sobel X):
     # O cabo é um objeto vertical. O operador Sobel na direção X destacará suas bordas verticais.
-    sobelx = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3) # Derivada na direção X
+    sobelx = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=5) # Derivada na direção X
     sobelx = cv2.convertScaleAbs(sobelx) # Converte de volta para 8-bit
 
     # 4. Análise do Perfil Horizontal para encontrar a coluna mais "ativa"
     # Somamos os valores de pixel de cada coluna. O cabo terá um pico de bordas.
-    horizontal_profile = np.sum(sobelx, axis=0)
-
-    # 3. Encontrar Picos (Bordas)
-    PEAK_HEIGHT_THRESHOLD = 20000 
-    PEAK_MIN_DISTANCE = 30       
+    horizontal_profile = np.sum(sobelx, axis=0)  
     
     # Filtra os picos com a altura e distância mínima
     peaks, properties = find_peaks(horizontal_profile, 
@@ -134,46 +150,29 @@ def centralizar_cabo_dinamicamente(
     
     center_x = w // 2 # Centro padrão de fallback
     center_y = h // 2
+    
+    valid_peaks = peaks[(peaks >= X_MIN_ALLOWED) & (peaks <= X_MAX_ALLOWED)]
+    
 
-    # Perfil da metade esquerda
-    left_profile = horizontal_profile[:center_x]
-    
-    # Encontra os picos na metade esquerda
-    left_peaks, left_properties = find_peaks(left_profile, height=PEAK_HEIGHT_THRESHOLD)
-    
-    if left_peaks.size > 0:
-        for peak in reversed(left_peaks):
-            borda_esquerda = peak
-            break
+    left_peaks_in_roi = valid_peaks[valid_peaks < center_x]
+    if left_peaks_in_roi.size > 0:
+        borda_esquerda = left_peaks_in_roi[-1]
+    else: 
+        borda_esquerda = X_MIN_ALLOWED
+            
+    # Encontre o pico de maior valor (borda mais forte) na direita permitida
+    right_peaks_in_roi = valid_peaks[valid_peaks > center_x]
+    if right_peaks_in_roi.size > 0:
+        borda_direita = right_peaks_in_roi[0]
     else:
-        # Fallback se nenhum pico relevante for encontrado (e.g., borda_esquerda = 150)
-        print("[ALERTA] Borda Esquerda não detectada. Usando fallback.")
-        borda_esquerda = int(w * 0.2) # Chute em 20% da largura (ajuste se necessário)
-
-    # Perfil da metade direita
-    right_profile = horizontal_profile[center_x:]
+        borda_direita = X_MAX_ALLOWED
     
-    # Encontra os picos na metade direita
-    right_peaks, right_properties = find_peaks(right_profile, height=PEAK_HEIGHT_THRESHOLD)
-    
-    if right_peaks.size > 0:
-        for peak in right_peaks:
-            borda_direita = peak + center_x
-            break
-    else:
-        # Fallback se nenhum pico relevante for encontrado (e.g., borda_direita = 500)
-        print("[ALERTA] Borda Direita não detectada. Usando fallback.")
-        borda_direita = int(w * 0.8) # Chute em 80% da largura (ajuste se necessário)
+    if borda_direita - borda_esquerda < MIN_CABLE_WIDTH:
+        # Se ficaram muito perto, expande artificialmente
+        borda_direita = min(borda_esquerda + MIN_CABLE_WIDTH, X_MAX_ALLOWED)
+        borda_esquerda = max(X_MIN_ALLOWED, borda_direita - MIN_CABLE_WIDTH)
+        print(f"[AJUSTE] Largura do cabo forçada para o mínimo: {MIN_CABLE_WIDTH} pixels.")
 
-    # Se a borda detectada estiver fora do limite permitido, usamos o limite.
-    borda_esquerda = max(X_MIN_ALLOWED, borda_esquerda)
-    borda_direita = min(X_MAX_ALLOWED, borda_direita)
-
-    # Verifica se os limites se cruzaram após o clamping
-    if borda_esquerda >= borda_direita:
-         print(f"[ERRO] Limites de Clamping se cruzaram! Usando limites seguros: ({X_MIN_ALLOWED}, {X_MAX_ALLOWED})")
-         borda_esquerda = X_MIN_ALLOWED
-         borda_direita = X_MAX_ALLOWED
 
     center_x = (borda_esquerda + borda_direita) // 2
 
@@ -202,6 +201,8 @@ def centralizar_cabo_dinamicamente(
         axs[1].plot(horizontal_profile, color='black')
         axs[1].plot(peaks, horizontal_profile[peaks], "x", color='red') # Marca os picos detectados
         axs[1].axvline(x=center_x, color='r', linestyle='--', linewidth=1.5) # Linha do centro
+        axs[1].axvline(x=x_crop_start if len(peaks) >= 2 else 0, color='blue', linestyle=':', linewidth=1) 
+        axs[1].axvline(x=x_crop_end if len(peaks) >= 2 else 0, color='blue', linestyle=':', linewidth=1)
         axs[1].set_title('Perfil Horizontal (Picos = Bordas)')
 
         # Plot 5: Imagem Cortada Final
@@ -257,8 +258,8 @@ def process_image_folder_dynamic(input_dir: str, output_dir: str, size: int, deb
 if __name__ == "__main__":
     # --- CONFIGURAÇÕES DE EXECUÇÃO ---
 
-    INPUT_FOLDER = "../img_2025-08-28_16-37-33" 
-    OUTPUT_FOLDER = "../images_processadas_dinamicas_v2" 
+    INPUT_FOLDER = "new" 
+    OUTPUT_FOLDER = "../images_processadas_dinamicas_v" 
 
     FINAL_SIZE = 256
     DEBUG_MODE = True # Mantenha como True para ver o plot da primeira imagem

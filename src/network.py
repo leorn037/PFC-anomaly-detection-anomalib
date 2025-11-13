@@ -111,8 +111,8 @@ def crop_and_resize(
 
     # 3. CORTE HORIZONTAL PELAS BORDAS
     # O corte vertical (altura) permanece na imagem inteira, mas pode ser ajustado
-    x_crop_start = borda_esquerda+int(0.05*( borda_direita - borda_esquerda))
-    x_crop_end = borda_direita-int(0.05*(borda_direita - borda_esquerda))
+    x_crop_start = borda_esquerda+int(0.1*( borda_direita - borda_esquerda))
+    x_crop_end = borda_direita-int(0.1*(borda_direita - borda_esquerda))
 
     cropped_frame = frame_bgr[Y_CUT:h-Y_CUT, x_crop_start:x_crop_end]
 
@@ -257,7 +257,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             if decoded_image is None: continue
             
             # Exibe a imagem
-            cv2.imshow("Recepção de Imagens", decoded_image)
+            cv2.imshow("Recepcao de Imagens", decoded_image)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('c') and not saving:

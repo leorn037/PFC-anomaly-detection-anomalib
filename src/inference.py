@@ -487,7 +487,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
 
             # 4. Visualização
-            cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+            cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
 
             # Saída ao pressionar 'q'
             if cv2.waitKey(1) & 0xFF == ord('q'):

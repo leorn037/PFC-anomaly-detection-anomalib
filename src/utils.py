@@ -39,7 +39,7 @@ CONFIG = {
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
-    "evaluate": False, 
+    "evaluate": True, 
 
     "operation_mode" : 'Train', # Operação com modelo ('Inference','Train')
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
