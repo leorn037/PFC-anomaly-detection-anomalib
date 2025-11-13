@@ -60,7 +60,7 @@ def crop_and_resize(
     
     # 3. Detecção de Bordas Verticais (Sobel X):
     # O cabo é um objeto vertical. O operador Sobel na direção X destacará suas bordas verticais.
-    sobelx = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3) # Derivada na direção X
+    sobelx = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=5) # Derivada na direção X
     sobelx = cv2.convertScaleAbs(sobelx) # Converte de volta para 8-bit
 
     # 4. Análise do Perfil Horizontal para encontrar a coluna mais "ativa"
