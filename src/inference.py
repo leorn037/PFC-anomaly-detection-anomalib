@@ -493,13 +493,11 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                     print(f"[{Colors.GREEN}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
                     is_anomaly_confirmed = True # Mantém a decisão
                     response = b'A'
-                    break
                 elif key == ord('N'):
                     print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
                     anomaly_streak = 0
                     is_anomaly_confirmed = False # SOBRESCREVE a decisão do modelo
                     response = b'N'
-                    break
             else:
                 response = b'N'
                 # 4. Visualização

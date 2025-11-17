@@ -84,11 +84,11 @@ def main(camera):
             config['ckpt_path'] = dict['ckpt_path']
             print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
         else: 
-            from models import MODEL_CONFIGS, create_model
             f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}"
 
         if not config["network_inference"]:
             # 2. Crie o modelo
+            from models import MODEL_CONFIGS, create_model
             model = create_model(config)
             if model == None: return
 
