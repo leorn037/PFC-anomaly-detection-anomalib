@@ -151,6 +151,10 @@ def collect_and_split_dataset(
     saved_manual_count = 0
     saving = False
 
+    if pause_output:
+        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: MOVER")
+        pause_output.off()    
+    
     try:
         if hasattr(camera, 'start'): camera.start()
         while True:
@@ -179,8 +183,8 @@ def collect_and_split_dataset(
                         command = conn.recv(1).decode().strip()
                         if command == "C":
                             if pause_output:
-                                print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
-                                pause_output.on()     # Liga a pausa
+                                print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: MOVER")
+                                pause_output.off()    
                             saving = True
                             saved_auto_count = 0
                             print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Iniciando salvamento automático por comando do PC.")

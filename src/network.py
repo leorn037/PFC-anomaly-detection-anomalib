@@ -506,10 +506,15 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None, pause_output 
                     return 'DISCONNECTED'
                 
                 if response_bytes == b'Q': return print("Q")
-        
+                if response_bytes == b'P' and pause_output: 
+                    print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
+                    pause_output.on()    
+                elif pause_output:
+                        pause_output.on()
+
                 is_anomaly = response_bytes == b'A'
                 end_time = time.time()
-                
+                                
                 status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
                 
                 if anomaly_output is None:
