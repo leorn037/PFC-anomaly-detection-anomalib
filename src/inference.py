@@ -454,10 +454,6 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                 anomaly_streak = 0 # Reseta a contagem se for um frame normal
                 is_anomaly_confirmed = False # Garante que a flag seja desligada imediatamente se o score cair
 
-            # 6. Envia a flag de volta para a Raspberry Pi
-            response = b'A' if is_anomaly_confirmed else b'N'
-            sock.sendall(response)
-
             # Pós-processamento para visualização com OpenCV:
             anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
             anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
@@ -485,14 +481,35 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                         2)        # Espessura da linha
 
             combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
-
-            # 4. Visualização
-            cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+            
+            if is_anomaly_confirmed:
+                cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.imshow("Inferência em Tempo Real (PAUSADO)", combined_frame)
+                # --- PAUSA (Bloqueante) ---
+                # Espera indefinidamente (0) pela tecla 'y' ou 'n'
+                while True:
+                    key = cv2.waitKey(0) & 0xFF 
+                    if key == ord('y'):
+                        print(f"[{Colors.GREEN}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
+                        is_anomaly_confirmed = True # Mantém a decisão
+                        break
+                    elif key == ord('n'):
+                        print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
+                        anomaly_streak = 0
+                        is_anomaly_confirmed = False # SOBRESCREVE a decisão do modelo
+                        break
+            else:
+                # 4. Visualização
+                cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
 
             # Saída ao pressionar 'q'
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
                 break
+            
+            # 6. Envia a flag de volta para a Raspberry Pi
+            response = b'A' if is_anomaly_confirmed else b'N'
+            sock.sendall(response)
 
             print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly_confirmed}. Enviando flag...")
 

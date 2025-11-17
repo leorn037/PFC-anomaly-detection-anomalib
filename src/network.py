@@ -445,7 +445,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 "ckpt_path": str(file_path)
             }
 
-def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
+def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None, pause_output = None):
     """
     Captura frames, envia para um PC para inferência e recebe o resultado.
 
@@ -477,6 +477,10 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
         except (ConnectionResetError, BrokenPipeError, socket.timeout) as e:
             print(f"[{Colors.RED}Rede{Colors.RESET}] Conexão perdida durante a sincronização: {e}")
             return "DISCONNECTED"
+
+    if pause_output:
+        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
+        pause_output.on()     # Liga a pausa
 
     try:       
         picam2.start()
@@ -529,7 +533,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None):
                 return "DISCONNECTED"
     
     except ConnectionRefusedError:
-        print(f"{Colors.RED}Erro: Conexão recusada. O servidor no PC {pc_ip} não está online ou a porta {pc_port}está incorreta.{Colors.RESET}")
+        print(f"{Colors.RED}Erro: Conexão recusada.")
     except socket.timeout:
         print(f"{Colors.RED}Erro: Tempo limite excedido ao tentar conectar ao PC.{Colors.RESET}")
     except KeyboardInterrupt:
