@@ -480,7 +480,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None, pause_output 
 
     if pause_output:
         print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
-        pause_output.on()     # Liga a pausa
+        pause_output.off()     # Liga a pausa
 
     try:       
         picam2.start()
