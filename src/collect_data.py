@@ -164,7 +164,8 @@ def collect_and_split_dataset(
             if frame_bgr is None:
                 print("Erro: Não foi possível ler o frame.")
                 break
-
+            
+            
             frame_bgr = crop_and_resize(frame_bgr, size=new_size)
 
             current_time = time.time()
