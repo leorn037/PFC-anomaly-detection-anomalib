@@ -467,7 +467,7 @@ def receive_model_from_pc(server_port: int, output_dir: str):
                 "ckpt_path": str(file_path)
             }
 
-def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None, move_output = None):
+def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, move_output = None):
     """
     Captura frames, envia para um PC para inferência e recebe o resultado.
 
@@ -509,8 +509,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None, move_output =
         while True:
             # 1. Captura o frame da câmera
             frame = picam2.capture_array()
-            frame = crop_and_resize(frame, 
-                                    size=None)
+            frame = crop_and_resize(frame, size=image_size)
             start_time = time.time()
 
             send_tcp_frame(conn, frame)

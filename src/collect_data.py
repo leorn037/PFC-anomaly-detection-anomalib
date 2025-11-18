@@ -72,6 +72,7 @@ def collect_and_split_dataset(
     time_sample: float = 0.1,  # Salvar um frame a cada X segundos
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
     image_size: int = 640,
+    new_size = None,
     conn = None,
     move_output = None,
     ):
@@ -164,8 +165,7 @@ def collect_and_split_dataset(
                 print("Erro: Não foi possível ler o frame.")
                 break
 
-            frame_bgr = crop_and_resize(frame_bgr, 
-                            size=None)
+            frame_bgr = crop_and_resize(frame_bgr, size=new_size)
 
             current_time = time.time()
 

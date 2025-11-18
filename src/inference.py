@@ -481,7 +481,9 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                         2)        # Espessura da linha
 
             combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
-            
+            new_size = 640
+            combined_frame_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
+
             if is_anomaly_confirmed:
                 response = b'P'
                 cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 2)

@@ -63,8 +63,9 @@ def main(camera):
                 time_sample=config["time_sample"],                       # Salvar um frame normal automaticamente a cada 0.5 segundos
                 total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
                 image_size=config["collect_img_size"],
+                new_size=config["image_size"],
                 conn = conn,
-                move_output=move_output
+                move_output=move_output,
             )
             if ret == "DISCONNECTED":
                 if conn: conn.close()
@@ -100,7 +101,7 @@ def main(camera):
 
         if config["live"]:
                 if config["network_inference"] and conn: 
-                    ret = live_inference_rasp_to_pc(camera, conn, anomaly_output, move_output)
+                    ret = live_inference_rasp_to_pc(camera, conn, config["image_size"], anomaly_output, move_output)
                     if ret == "DISCONNECTED": 
                         if conn: conn.close()
                         if server_sock: server_sock.close()
