@@ -484,8 +484,8 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             
             if is_anomaly_confirmed:
                 response = b'P'
-                cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (0, 0, 255), 1)
-                cv2.imshow("Inferência em Tempo Real (PAUSADO)", combined_frame)
+                cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
+                cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
                 # --- PAUSA (Bloqueante) ---
                 # Espera indefinidamente (0) pela tecla 'y' ou 'n'
                 key = cv2.waitKey(1) & 0xFF 

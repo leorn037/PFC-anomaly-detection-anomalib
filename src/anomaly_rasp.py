@@ -70,7 +70,7 @@ def main(camera):
                 if server_sock: server_sock.close()
                 return True
 
-        else: f"{Colors.YELLOW}Coleta de Imagens Desabilitada.'{Colors.RESET}"
+        else: print(f"{Colors.YELLOW}Coleta de Imagens Desabilitada.'{Colors.RESET}")
 
         if config["receive_model"]:
             start_time = time.time()
@@ -84,7 +84,7 @@ def main(camera):
             config['ckpt_path'] = dict['ckpt_path']
             print(f"{Colors.BLUE}Recebimento do modelo concuído em {receive_model_time:.2f} segundos.{Colors.RESET}")
         else: 
-            f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}"
+            print(f"{Colors.YELLOW}Recebimento de Modelo Desabilitado{Colors.RESET}")
 
         if not config["network_inference"]:
             # 2. Crie o modelo
