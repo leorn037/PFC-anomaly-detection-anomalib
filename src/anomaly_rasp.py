@@ -34,7 +34,7 @@ try:
     def cleanup_gpio():
         if anomaly_output: anomaly_output.off()
         if move_output: move_output.off()
-        time.sleep(0.1)
+        time.sleep(1)
         print(f"[{Colors.CYAN}GPIO{Colors.RESET}] Sinais LOW garantidos nos pinos {ANOMALY_SIGNAL_PIN} e {MOVE_SIGNAL_PIN} ao finalizar.")
     
     atexit.register(cleanup_gpio)

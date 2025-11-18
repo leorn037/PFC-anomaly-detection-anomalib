@@ -27,7 +27,7 @@ def crop_and_resize(
     """
     h, w, _ = frame_bgr.shape
 
-    # --- LIMITES RÍGIDOS PARA AS COORDENADAS X ---
+    # --- LIMITES RÍGIDOS ---
     X_MIN_ALLOWED = 250 #214
     X_MAX_ALLOWED = 392 #437
     Y_CUT = 0
@@ -111,14 +111,36 @@ def crop_and_resize(
 
     # 3. CORTE HORIZONTAL PELAS BORDAS
     # O corte vertical (altura) permanece na imagem inteira, mas pode ser ajustado
-    x_crop_start = borda_esquerda+int(0.1*( borda_direita - borda_esquerda))
-    x_crop_end = borda_direita-int(0.1*(borda_direita - borda_esquerda))
+    margin = int(0.1 * (borda_direita - borda_esquerda))
+    x_crop_start = borda_esquerda + margin
+    x_crop_end = borda_direita - margin
 
     cropped_frame = frame_bgr[Y_CUT:h-Y_CUT, x_crop_start:x_crop_end]
 
-    if size: 
-        resized_frame = cv2.resize(cropped_frame, (size, size), interpolation=cv2.INTER_LINEAR)
-        return resized_frame
+    if size:
+        # Passo A: Cria um "Canvas" (Fundo) preto quadrado do tamanho final
+        canvas = np.zeros((size, size, 3), dtype=np.uint8)
+
+        # Passo B: Calcula a escala para redimensionar MANTENDO PROPORÇÃO
+        h_crop, w_crop = cropped_frame.shape[:2]
+
+        # Descobre qual dimensão limita o redimensionamento (normalmente a altura)
+        scale = min(size / h_crop, size / w_crop)
+
+        # Calcula novas dimensões proporcionais
+        new_w = int(w_crop * scale)
+        new_h = int(h_crop * scale)
+
+        resized_crop = cv2.resize(cropped_frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
+        # Passo C: Calcula offsets para centralizar no canvas
+        x_offset = (size - new_w) // 2
+        y_offset = (size - new_h) // 2
+
+        # Passo D: Cola a imagem redimensionada no centro do canvas
+        canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_crop
+
+        return canvas
     else:
         return cropped_frame
 
