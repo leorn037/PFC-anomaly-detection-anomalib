@@ -73,7 +73,7 @@ def collect_and_split_dataset(
     total_frames_to_collect: int = 200, # Total de frames normais a coletar automaticamente
     image_size: int = 640,
     conn = None,
-    pause_output = None,
+    move_output = None,
     ):
     """
     Coleta imagens de uma câmera, as salva temporariamente e as divide
@@ -151,9 +151,9 @@ def collect_and_split_dataset(
     saved_manual_count = 0
     saving = False
 
-    if pause_output:
+    if move_output:
         print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: MOVER")
-        pause_output.off()    
+        move_output.on()    
     
     try:
         if hasattr(camera, 'start'): camera.start()
@@ -182,17 +182,17 @@ def collect_and_split_dataset(
                     try:
                         command = conn.recv(1).decode().strip()
                         if command == "C":
-                            if pause_output:
+                            if move_output:
                                 print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: MOVER")
-                                pause_output.off()    
+                                move_output.on()    
                             saving = True
                             saved_auto_count = 0
                             print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Iniciando salvamento automático por comando do PC.")
                             
                         elif command == "Q":
-                            if pause_output:
+                            if move_output:
                                 print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
-                                pause_output.on()     # Liga a pausa
+                                move_output.off()     # Liga a pausa
                             saving = False
                             print(f"[{Colors.YELLOW}Comando PC{Colors.RESET}] Parando salvamento por comando do PC.")
                             break
@@ -241,6 +241,9 @@ def collect_and_split_dataset(
                 saving = False
                 # Uma vez que o limite automático é atingido, resetamos a condição para que ele não tente mais salvar automaticamente
                 total_frames_to_collect = -1 # Garante que a condição 'saved_auto_count < total_frames_to_collect' seja falsa
+                if move_output:
+                    print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
+                    move_output.off()     # Liga a pausa
                 break
     finally:
         if isinstance(camera, cv2.VideoCapture):

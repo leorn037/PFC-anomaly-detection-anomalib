@@ -18,23 +18,23 @@ except ImportError:
     OutputDevice = None # Cria uma classe Falsa para evitar erros
 
 ANOMALY_SIGNAL_PIN = 17 # Linha 1 Coluna 6
-PAUSE_SIGNAL_PIN = 27    # Pino para PAUSAR ROBÔ
+MOVE_SIGNAL_PIN = 27    # Pino para PAUSAR ROBÔ
 
 anomaly_output = None
-pause_output = None
+move_output = None
 
 try:
         # 1. Configura o pino de Anomalia (queima)
     anomaly_output = OutputDevice(ANOMALY_SIGNAL_PIN, active_high=True, initial_value=False)
     
     # 2. NOVO: Configura o pino de Pausa
-    pause_output = OutputDevice(PAUSE_SIGNAL_PIN, active_high=True, initial_value=False)
+    move_output = OutputDevice(MOVE_SIGNAL_PIN, active_high=True, initial_value=False)
 
     # Função para garantir que o pino seja desligado ao final do script
     def cleanup_gpio():
         if anomaly_output: anomaly_output.off()
-        if pause_output: pause_output.off()
-        print(f"[{Colors.CYAN}GPIO{Colors.RESET}] Sinais LOW garantidos nos pinos {ANOMALY_SIGNAL_PIN} e {PAUSE_SIGNAL_PIN} ao finalizar.")
+        if move_output: move_output.off()
+        print(f"[{Colors.CYAN}GPIO{Colors.RESET}] Sinais LOW garantidos nos pinos {ANOMALY_SIGNAL_PIN} e {MOVE_SIGNAL_PIN} ao finalizar.")
     
     atexit.register(cleanup_gpio)
 
@@ -63,7 +63,7 @@ def main(camera):
                 total_frames_to_collect=config["img_n"],             # Parar a coleta automática de normais após 200 frames
                 image_size=config["collect_img_size"],
                 conn = conn,
-                pause_output=pause_output
+                move_output=move_output
             )
             if ret == "DISCONNECTED":
                 if conn: conn.close()
@@ -99,7 +99,7 @@ def main(camera):
 
         if config["live"]:
                 if config["network_inference"] and conn: 
-                    ret = live_inference_rasp_to_pc(camera, conn, anomaly_output, pause_output)
+                    ret = live_inference_rasp_to_pc(camera, conn, anomaly_output, move_output)
                     if ret == "DISCONNECTED": 
                         if conn: conn.close()
                         if server_sock: server_sock.close()
