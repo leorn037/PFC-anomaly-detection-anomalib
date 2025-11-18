@@ -279,7 +279,8 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             if decoded_image is None: continue
             
             # Exibe a imagem
-            cv2.imshow("Recepcao de Imagens", decoded_image)
+            resized_image = cv2.resize(decoded_image, 2*decoded_image.shape, interpolation=cv2.INTER_LINEAR)
+            cv2.imshow("Recepcao de Imagens", resized_image)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('c') and not saving:
@@ -509,10 +510,12 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
         while True:
             # 1. Captura o frame da câmera
             frame = picam2.capture_array()
-            frame = crop_and_resize(frame, size=image_size)
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            frame_bgr = crop_and_resize(frame_bgr, size=image_size)
             start_time = time.time()
 
-            send_tcp_frame(conn, frame)
+            send_tcp_frame(conn, frame_bgr)
             # 4. Espera a resposta do PC
             conn.settimeout(120)
             try:
