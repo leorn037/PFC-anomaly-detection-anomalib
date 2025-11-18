@@ -484,30 +484,29 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             
             if is_anomaly_confirmed:
                 response = b'P'
-                cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
-                cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
-                # --- PAUSA (Bloqueante) ---
-                # Espera indefinidamente (0) pela tecla 'y' ou 'n'
-                key = cv2.waitKey(1) & 0xFF 
+                cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            
+            cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
+
+            key = cv2.waitKey(1) & 0xFF 
+
+            # Saída ao pressionar 'q'
+            if key == ord('q'):
+                print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
+                break
+            
+            if is_anomaly_confirmed:
                 if key == ord('y'):
-                    print(f"[{Colors.GREEN}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
-                    is_anomaly_confirmed = True # Mantém a decisão
+                    print(f"[{Colors.RED}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
                     response = b'A'
-                elif key == ord('N'):
+                elif key == ord('n'):
                     print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
                     anomaly_streak = 0
                     is_anomaly_confirmed = False # SOBRESCREVE a decisão do modelo
                     response = b'N'
             else:
                 response = b'N'
-                # 4. Visualização
-                cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
-
-            # Saída ao pressionar 'q'
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
-                break
-            
+                
             # 6. Envia a flag de volta para a Raspberry Pi
             ##response = b'A' if is_anomaly_confirmed else b'N'
             sock.sendall(response)

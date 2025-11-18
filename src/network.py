@@ -510,7 +510,7 @@ def live_inference_rasp_to_pc(picam2, conn, anomaly_output = None, move_output =
                     print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] PAUSADOO")
                     move_output.off()    
                 elif move_output:
-                        move_output.on()
+                    move_output.on()
 
                 is_anomaly = response_bytes == b'A'
                 end_time = time.time()

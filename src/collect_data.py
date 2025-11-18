@@ -152,8 +152,8 @@ def collect_and_split_dataset(
     saving = False
 
     if move_output:
-        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: MOVER")
-        move_output.on()    
+        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal: PAUSAR")
+        move_output.off()    
     
     try:
         if hasattr(camera, 'start'): camera.start()
