@@ -279,7 +279,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             if decoded_image is None: continue
             
             # Exibe a imagem
-            resized_image = cv2.resize(decoded_image, 2*decoded_image.shape, interpolation=cv2.INTER_LINEAR)
+            resized_image = cv2.resize(decoded_image, (decoded_image.shape[0] * 2,decoded_image.shape[1] * 2), interpolation=cv2.INTER_LINEAR)
             cv2.imshow("Recepcao de Imagens", resized_image)
 
             key = cv2.waitKey(1) & 0xFF
@@ -530,11 +530,6 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
                     return 'DISCONNECTED'
                 
                 if response_bytes == b'Q': return print("Q")
-                if response_bytes == b'P' and move_output: 
-                    print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] PAUSADOO")
-                    move_output.off()    
-                elif move_output:
-                    move_output.on()
 
                 is_anomaly = response_bytes == b'A'
                 end_time = time.time()
@@ -547,6 +542,10 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
                 elif is_anomaly:
                     anomaly_output.on() # Define o pino para HIGH (3.3V)
                     print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino GPIO {anomaly_output.pin.number}.")
+                elif response_bytes == b'P':
+                    if move_output: 
+                        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] PAUSADOO")
+                        move_output.off() 
                 else:
                     anomaly_output.off() # Define o pino para LOW (0V)
                     print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino GPIO {anomaly_output.pin.number}.")

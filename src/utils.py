@@ -20,7 +20,7 @@ CONFIG = {
     # Coleta de Imagens
     "collect" : True, # Coleta de Imagens pela Rasp para treinamento
     "time_sample" : 0.2,
-    "img_n" : 150,
+    "img_n" : 100,
     "collect_img_size": 640,
 
     # Recebimento do modelo pela rasp
@@ -36,10 +36,12 @@ CONFIG = {
     "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "data/test", # Imagens normais para teste
 
+
+    #! Evaluate, folders, img_size, live
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
-    "evaluate": True, 
+    "evaluate": False, 
 
     "operation_mode" : 'Train', # Operação com modelo ('Inference','Train')
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp

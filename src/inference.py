@@ -360,7 +360,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
     import os
 
     # --- Configuração de Consenso ---
-    CONSECUTIVE_ANOMALY_LIMIT = 5 # Limite de flags seguidas
+    CONSECUTIVE_ANOMALY_LIMIT = 3 # Limite de flags seguidas
     anomaly_streak = 0            # Contador de flags consecutivas
     is_anomaly_confirmed = False  # Flag para o sinal a ser enviado para a Pi
     
@@ -465,8 +465,8 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
             # Salva as imagens
             timestamp = int(time.time() * 1000)
-            cv2.imwrite(str(inference_dir / f"original_{inference_count:04d}_{timestamp}.jpg"), decoded_image)
-            cv2.imwrite(str(inference_dir / f"anomaly_map_{inference_count:04d}_{timestamp}_{pred_score:.4f}.jpg"), anomaly_map_colored)
+            cv2.imwrite(str(inference_dir / f"{inference_count:04d}_{timestamp}_original.jpg"), decoded_image)
+            cv2.imwrite(str(inference_dir / f"{inference_count:04d}_{timestamp}_anomaly_map_{pred_score:.4f}.jpg"), anomaly_map_colored)
             print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
 
             inference_count += 1
@@ -480,9 +480,11 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                         (0, 255, 0), # Cor verde (BGR)
                         2)        # Espessura da linha
 
+            decoded_image = apply_pred_mask_on_image(decoded_image, pred_mask, color=(0,0,255))
+
             combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
             new_size = 640
-            combined_frame_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
+            combined_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
 
             if is_anomaly_confirmed:
                 response = b'P'
@@ -523,7 +525,6 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
         except Exception as e:
             print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
             raise e
-            break
             
     cv2.destroyAllWindows()
     
