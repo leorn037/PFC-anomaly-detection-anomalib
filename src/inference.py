@@ -342,7 +342,7 @@ def live_inference_rasp(model, config, camera):
             cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
-def serve_inference_to_pi(model, config, sock, threshold=1.0):
+def serve_inference_to_pi(model, config, sock, threshold=0.9):
     """
     Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
 
@@ -487,6 +487,7 @@ def serve_inference_to_pi(model, config, sock, threshold=1.0):
             combined_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
 
             if is_anomaly_confirmed:
+                print("Pausa para confirmação")
                 response = b'P'
                 cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 2)
             
@@ -541,7 +542,7 @@ def check_for_anomaly_by_score(pred_score: float, threshold: float = ANOMALY_SCO
     Returns:
         True se a imagem for anômala, False caso contrário.
     """
-    return pred_score > threshold
+    return pred_score >= threshold
 
 # Mais sensível a anomalias localizadas, independentemente do score total da imagem.
 # Pode ser sensível a ruído, detectando pequenos grupos de pixels anômalos que não representam um defeito real.

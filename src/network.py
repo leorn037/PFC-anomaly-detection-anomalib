@@ -546,9 +546,10 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
                     if move_output: 
                         print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] PAUSADO")
                         status = f"{Colors.YELLOW}Pausado{Colors.RESET}"
-                        move_output.off() 
+                        move_output.off()
                 else:
                     anomaly_output.off() # Define o pino para LOW (0V)
+                    move_output.on()
                     print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino GPIO {anomaly_output.pin.number}.")
 
                 print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
