@@ -16,3 +16,4 @@ __pycache__/
 inference_results/
 results/
 **/img*
+docker_models_cache/

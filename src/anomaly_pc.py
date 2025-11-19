@@ -47,7 +47,7 @@ def main():
         print(f"\n{Colors.BLUE}--- Verificando detecção de anomalias em imagens individuais ---{Colors.RESET}")
 
         if config["live"]:
-                if config["network_inference"]: serve_inference_to_pi(model, config, sock, threshold=0.9)
+                if config["network_inference"]: serve_inference_to_pi(model, config, sock, threshold=1.0)
                 elif config["visual_rasp"]: receive_and_process_data()
                 else: live_inference_opencv(model, config["image_size"])
         else:

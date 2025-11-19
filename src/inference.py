@@ -342,7 +342,7 @@ def live_inference_rasp(model, config, camera):
             cv2.destroyAllWindows()
         print(f"{Colors.YELLOW}Câmera e socket liberados.{Colors.RESET}")
 
-def serve_inference_to_pi(model, config, sock, threshold=0.9):
+def serve_inference_to_pi(model, config, sock, threshold=1.0):
     """
     Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
 
