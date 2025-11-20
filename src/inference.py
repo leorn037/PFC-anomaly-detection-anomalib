@@ -360,7 +360,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
     import os
 
     # --- Configuração de Consenso ---
-    CONSECUTIVE_ANOMALY_LIMIT = 3 # Limite de flags seguidas
+    CONSECUTIVE_ANOMALY_LIMIT = 1 # Limite de flags seguidas
     anomaly_streak = 0            # Contador de flags consecutivas
     is_anomaly_confirmed = False  # Flag para o sinal a ser enviado para a Pi
     
@@ -504,7 +504,6 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                 if key == ord('y'):
                     print(f"[{Colors.RED}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
                     response = b'A'
-                    
                 elif key == ord('n'):
                     print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
                     anomaly_streak = 0
