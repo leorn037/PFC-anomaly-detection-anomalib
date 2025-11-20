@@ -541,6 +541,8 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
                     print(f"[{Colors.YELLOW}GPIO{Colors.RESET}] Aviso: Sinal não enviado (Inicialização do pino falhou).")
                 elif is_anomaly:
                     anomaly_output.on() # Define o pino para HIGH (3.3V)
+                    time.sleep(0.5)
+                    anomaly_output.off()
                     print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino GPIO {anomaly_output.pin.number}.")
                 elif response_bytes == b'P':
                     if move_output: 

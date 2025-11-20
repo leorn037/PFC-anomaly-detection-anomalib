@@ -504,6 +504,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                 if key == ord('y'):
                     print(f"[{Colors.RED}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
                     response = b'A'
+                    
                 elif key == ord('n'):
                     print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
                     anomaly_streak = 0
