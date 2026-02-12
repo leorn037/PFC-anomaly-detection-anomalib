@@ -482,7 +482,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
             decoded_image = apply_pred_mask_on_image(decoded_image, pred_mask, color=(0,0,255))
 
-            combined_frame = np.hstack((cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), anomaly_map_colored))
+            combined_frame = np.hstack((decoded_image, anomaly_map_colored))
             new_size = 640
             combined_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
 
