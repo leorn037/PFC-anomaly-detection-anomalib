@@ -88,7 +88,7 @@ class CaboTracker:
                             self.right_candidates.append(center_x)
 
 
-        print(f"Hough: {len(self.left_candidates)} esquerda(s), {len(self.right_candidates)} direita(s)")
+        #* print(f"Hough: {len(self.left_candidates)} esquerda(s), {len(self.right_candidates)} direita(s)")
 
         center_img = w_roi // 2
         tolerance = 40  # Pixels do centro para IGNORAR
@@ -96,7 +96,7 @@ class CaboTracker:
         self.left_candidates = [x for x in self.left_candidates if abs(x - center_img) > tolerance]
         self.right_candidates = [x for x in self.right_candidates if abs(x - center_img) > tolerance]
 
-        print(f"Hough FILTRADO: {len(self.left_candidates)} Esq, {len(self.right_candidates)} Dir (ignorou ±{tolerance}px centro)")
+        #* print(f"Hough FILTRADO: {len(self.left_candidates)} Esq, {len(self.right_candidates)} Dir (ignorou ±{tolerance}px centro)")
 
 
         # PRIORIDADE 1: LÓGICA DAS BORDAS
@@ -113,31 +113,31 @@ class CaboTracker:
             left = int(left_border + margin)
             right = int(right_border - margin)
             
-            print(f"Bordas reais: L={left}, R={right}, largura={right-left}px")
+            #* print(f"Bordas reais: L={left}, R={right}, largura={right-left}px")
 
         elif self.left_candidates:
             # SÓ ESQUERDA: usa + MIN_WIDTH à direita
             left_border = max(self.left_candidates)
             left = int(left_border + int(self.MIN_CABLE_WIDTH * self.margin_percent))  # Pequena margem
             right = int(left + self.MIN_CABLE_WIDTH)
-            print(f"⚠️ SÓ ESQUERDA: L={left}, R={right} (width fixo)")
+            #* print(f"⚠️ SÓ ESQUERDA: L={left}, R={right} (width fixo)")
                 
         elif self.right_candidates:
             # SÓ DIREITA: usa MIN_WIDTH à esquerda
             right_border = min(self.right_candidates)
             right = int(right_border - int(self.MIN_CABLE_WIDTH * self.margin_percent))
             left = int(right - self.MIN_CABLE_WIDTH)
-            print(f"⚠️ SÓ DIREITA: L={left}, R={right} (width fixo)")
+            #* print(f"⚠️ SÓ DIREITA: L={left}, R={right} (width fixo)")
                 
         else:
             # NENHUM lado
             left, right = self.x_min, self.x_max
-            print("❌ SEM BORDAS: usando zona completa")
+            #* print("❌ SEM BORDAS: usando zona completa")
 
         largura_atual = right - left
 
         if largura_atual < self.MIN_CABLE_WIDTH:
-            print(f"🔧 EXPANDINDO (centrado): {left}→{right} ({largura_atual}px)")
+            #* print(f"🔧 EXPANDINDO (centrado): {left}→{right} ({largura_atual}px)")
             
             ajuste_total = self.MIN_CABLE_WIDTH - largura_atual
             center_cut = (left + right) // 2  # CENTRO do corte atual
@@ -154,8 +154,8 @@ class CaboTracker:
             ajuste_left = int(ajuste_total * (peso_left / total_peso))
             ajuste_right = int(ajuste_total * (peso_right / total_peso))
             
-            print(f"   Pesos: Esq={peso_left:.2f}, Dir={peso_right:.2f}")
-            print(f"   Ajustes: Esq={ajuste_left}px, Dir={ajuste_right}px")
+            #* print(f"   Pesos: Esq={peso_left:.2f}, Dir={peso_right:.2f}")
+            #* print(f"   Ajustes: Esq={ajuste_left}px, Dir={ajuste_right}px")
             
             # Expansão ESQUERDA (prioridade se perto do centro)
             espaco_esq = left - self.x_min
@@ -175,14 +175,14 @@ class CaboTracker:
                 
                 if espaco_restante_esq >= espaco_restante_dir:
                     left = max(self.x_min, left - sobra_total)
-                    print(f"   ↩️ Sobra {sobra_total}px → ESQUERDA (mais espaço)")
+                    #* print(f"   ↩️ Sobra {sobra_total}px → ESQUERDA (mais espaço)")
                 else:
                     right = min(self.x_max, right + sobra_total)
-                    print(f"   ↪️ Sobra {sobra_total}px → DIREITA (mais espaço)")
+                    #* print(f"   ↪️ Sobra {sobra_total}px → DIREITA (mais espaço)")
             
-            print(f"✅ FINAL: {left}→{right} ({right-left}px)")
+            #* print(f"✅ FINAL: {left}→{right} ({right-left}px)")
 
-        print(f"Largura final do corte: {right - left}px")
+        #* print(f"Largura final do corte: {right - left}px")
         cropped = frame_roi[:, left:right]
 
         if crop_output_size:
