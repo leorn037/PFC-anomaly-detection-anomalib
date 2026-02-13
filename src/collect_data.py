@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from utils import Colors
-from network import crop_and_resize, send_tcp_frame
+from network import send_tcp_frame
 from cabo_tracker import CaboTracker
 
 try:
