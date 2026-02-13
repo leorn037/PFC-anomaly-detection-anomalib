@@ -274,7 +274,17 @@ void loop() {
     // O comando 'D' em OnRxDone já acionou o atuador e parou os motores.
     // Apenas garantimos que o estado de queima seja resetado.
     estadoQueimaAtual = OCIOSO;
-    Serial.println("Parado por botão de emergência!");
+
+    // 2. Lógica Anti-Spam: Só printa se passou 1 segundo (1000ms)
+    static unsigned long timerEmerg = 0; // 'static' memoriza o valor entre loops
+        
+      if (millis() - timerEmerg > 1000) {
+          timerEmerg = millis(); // Atualiza o relógio
+          
+        // Agora sim, pode printar sem travar
+        Serial.println("Parado por botão de emergência!");
+      }
+    
     return;  // Não faz mais nada até a emergência ser liberada (comando 'C')
   }
 

@@ -76,9 +76,10 @@ try:
         elif cmd == '-':  # Diminui 10
             velocidade_atual = max(0, velocidade_atual - 10)
             print(f"✅ Velocidade: {velocidade_atual}")
-        esp.write((cmd + '\n').encode())
-        print(f"Enviado: {cmd}")
-            
+        else:
+            esp.write((cmd + '\n').encode())
+            print(f"Enviado: {cmd}")
+
 except KeyboardInterrupt:
     print("\nSaindo...")
 finally:
