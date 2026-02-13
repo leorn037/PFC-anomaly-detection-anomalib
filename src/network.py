@@ -6,143 +6,8 @@ import cv2
 from pathlib import Path
 from utils import Colors
 import time
-from scipy.signal import find_peaks
 import numpy as np
-
-def crop_and_resize(
-    frame_bgr: np.ndarray, 
-    size: int | None, 
-    ) -> np.ndarray:
-    """
-    Localiza o cabo usando detecção de bordas verticais e análise de perfil,
-    e o centraliza dentro de um corte quadrado, redimensionado para o tamanho final.
-
-    Args:
-        frame_bgr: Imagem de entrada em formato BGR (OpenCV).
-        crop_output_size: Tamanho final do lado do quadrado (ex: 256).
-        debug_show_steps: Se True, mostra as imagens intermediárias para depuração.
-
-    Returns:
-        np.ndarray: O frame final (cortado e redimensionado).
-    """
-    h, w, _ = frame_bgr.shape
-
-    # --- LIMITES RÍGIDOS ---
-    X_MIN_ALLOWED = 250 #214
-    X_MAX_ALLOWED = 392 #437
-    Y_CUT = 0
-    
-    # Reduz a altura da análise para ignorar o chão e o topo (ROI Vertical)
-    Y_START_ROI = int(h * 0.2) 
-    Y_END_ROI = int(h * 0.8)
-
-    # 3. Encontrar Picos (Bordas)
-    PEAK_HEIGHT_THRESHOLD = 60_000 
-    PEAK_MIN_DISTANCE = 30
-    MIN_CABLE_WIDTH = 125
-
-    frame_roi = frame_bgr[Y_START_ROI:Y_END_ROI, :]
-    # 60_000 k_size 5 frame_roi
-    # 15_000 k_size 3 frame_bgr
-
-    # 1. Pré-processamento: Tons de Cinza
-    gray = cv2.cvtColor(frame_roi, cv2.COLOR_BGR2GRAY)
-
-    # Criamos um retângulo largo e baixo. Ele vai "borrar" tudo que estiver perto na horizontal, fechando os buracos entre os fios do cabo.
-    # (15, 3) significa 15 pixels de largura por 3 de altura.
-    kernel_morph = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
-
-    # O 'Morph Close' é uma Dilatação seguida de Erosão. Ele preenche vazios escuros.
-    morph = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel_morph)
-
-    # 2. Suavização para reduzir ruído (Gaussian Blur é bom para isso)
-    blurred = cv2.GaussianBlur(morph, (5, 5), 0) # Ajuste o tamanho do kernel se necessário
-    
-    # 3. Detecção de Bordas Verticais (Sobel X):
-    # O cabo é um objeto vertical. O operador Sobel na direção X destacará suas bordas verticais.
-    sobelx = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=5) # Derivada na direção X
-    sobelx = cv2.convertScaleAbs(sobelx) # Converte de volta para 8-bit
-
-    # 4. Análise do Perfil Horizontal para encontrar a coluna mais "ativa"
-    # Somamos os valores de pixel de cada coluna. O cabo terá um pico de bordas.
-    horizontal_profile = np.sum(sobelx, axis=0)  
-    
-    # Filtra os picos com a altura e distância mínima
-    peaks, properties = find_peaks(horizontal_profile, 
-                                   height=PEAK_HEIGHT_THRESHOLD, 
-                                   distance=PEAK_MIN_DISTANCE)
-    
-    center_x = w // 2 # Centro padrão de fallback
-    center_y = h // 2
-
-    valid_peaks = peaks[(peaks >= X_MIN_ALLOWED) & (peaks <= X_MAX_ALLOWED)]
-    
-
-    left_peaks_in_roi = valid_peaks[valid_peaks < center_x]
-    if left_peaks_in_roi.size > 0:
-        borda_esquerda = left_peaks_in_roi[-1]
-    else: 
-        borda_esquerda = X_MIN_ALLOWED
-            
-    # Encontre o pico de maior valor (borda mais forte) na direita permitida
-    right_peaks_in_roi = valid_peaks[valid_peaks > center_x]
-    if right_peaks_in_roi.size > 0:
-        borda_direita = right_peaks_in_roi[0]
-    else:
-        borda_direita = X_MAX_ALLOWED
-    
-    if borda_direita - borda_esquerda < MIN_CABLE_WIDTH:
-        # Se ficaram muito perto, expande artificialmente
-        borda_direita = min(borda_esquerda + MIN_CABLE_WIDTH, X_MAX_ALLOWED)
-        borda_esquerda = max(X_MIN_ALLOWED, borda_direita - MIN_CABLE_WIDTH)
-        print(f"[AJUSTE] Largura do cabo forçada para o mínimo: {MIN_CABLE_WIDTH} pixels.")
-
-    # Se a borda detectada estiver fora do limite permitido, usamos o limite.
-    borda_esquerda = max(X_MIN_ALLOWED, borda_esquerda)
-    borda_direita = min(X_MAX_ALLOWED, borda_direita)
-
-    # Verifica se os limites se cruzaram após o clamping
-    if borda_esquerda >= borda_direita:
-        print(f"[ERRO] Limites de Clamping se cruzaram! Usando limites seguros: ({X_MIN_ALLOWED}, {X_MAX_ALLOWED})")
-        borda_esquerda = X_MIN_ALLOWED
-        borda_direita = X_MAX_ALLOWED
-
-    center_x = (borda_esquerda + borda_direita) // 2
-
-    # 3. CORTE HORIZONTAL PELAS BORDAS
-    # O corte vertical (altura) permanece na imagem inteira, mas pode ser ajustado
-    margin = int(0.1 * (borda_direita - borda_esquerda))
-    x_crop_start = borda_esquerda + margin
-    x_crop_end = borda_direita - margin
-
-    cropped_frame = frame_bgr[Y_CUT:h-Y_CUT, x_crop_start:x_crop_end]
-
-    if size:
-        # Passo A: Cria um "Canvas" (Fundo) preto quadrado do tamanho final
-        canvas = np.zeros((size, size, 3), dtype=np.uint8)
-
-        # Passo B: Calcula a escala para redimensionar MANTENDO PROPORÇÃO
-        h_crop, w_crop = cropped_frame.shape[:2]
-
-        # Descobre qual dimensão limita o redimensionamento (normalmente a altura)
-        scale = min(size / h_crop, size / w_crop)
-
-        # Calcula novas dimensões proporcionais
-        new_w = int(w_crop * scale)
-        new_h = int(h_crop * scale)
-
-        resized_crop = cv2.resize(cropped_frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-
-        # Passo C: Calcula offsets para centralizar no canvas
-        x_offset = (size - new_w) // 2
-        y_offset = (size - new_h) // 2
-
-        # Passo D: Cola a imagem redimensionada no centro do canvas
-        canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_crop
-
-        return canvas
-    else:
-        return cropped_frame
+from cabo_tracker import CaboTracker
 
 def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 70):
     """
@@ -507,12 +372,14 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
 
     try:       
         picam2.start()
+        tracker = CaboTracker(crop_output_size=image_size)
+        
         while True:
             # 1. Captura o frame da câmera
             frame = picam2.capture_array()
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-            frame_bgr = crop_and_resize(frame_bgr, size=image_size)
+            frame_bgr = tracker.track(frame_bgr)
             start_time = time.time()
 
             send_tcp_frame(conn, frame_bgr)

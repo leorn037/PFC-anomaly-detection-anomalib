@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from utils import Colors
 from network import crop_and_resize, send_tcp_frame
+from cabo_tracker import CaboTracker
 
 try:
     from picamera2 import Picamera2
@@ -158,6 +159,8 @@ def collect_and_split_dataset(
     
     try:
         if hasattr(camera, 'start'): camera.start()
+        tracker = CaboTracker(crop_output_size=new_size)
+
         while True:
             # Captura a imagem da câmera
             frame_bgr = get_frame(camera,image_size)
@@ -165,8 +168,7 @@ def collect_and_split_dataset(
                 print("Erro: Não foi possível ler o frame.")
                 break
             
-            
-            frame_bgr = crop_and_resize(frame_bgr, size=new_size)
+            frame_bgr = tracker.track(frame_bgr)
 
             current_time = time.time()
 
