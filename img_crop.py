@@ -94,7 +94,7 @@ def process_image_folder_dynamic(input_dir: str, output_dir: str, size: int, deb
 if __name__ == "__main__":
     # --- CONFIGURAÇÕES DE EXECUÇÃO ---
 
-    INPUT_FOLDER = "src/new2" 
+    INPUT_FOLDER = "src/novo" 
     OUTPUT_FOLDER = "teste1" 
 
     FINAL_SIZE = 256
