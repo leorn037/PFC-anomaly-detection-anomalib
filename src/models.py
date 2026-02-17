@@ -15,7 +15,7 @@ MODEL_CONFIGS = {
     "PatchCore": {
         "class": Patchcore,
         "params": {
-            "backbone": "resnet50", # "resnet18" "wide_resnet50_2"
+            "backbone": "wide_resnet50_2", # "resnet18" "wide_resnet50_2"
             "layers": ("layer2", "layer3"), # "layer3", "layer4"
             "coreset_sampling_ratio": 0.1,
             "num_neighbors": 9

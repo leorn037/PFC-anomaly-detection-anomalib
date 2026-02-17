@@ -45,8 +45,6 @@ bool lora_idle = true;
 int PWM = 0, pwm = 0;
 bool emergency_stop = false;
 
-// NOVO: --- Definições para Lógica Semi-Automática ---
-// Defina os pinos GPIO que você usará para conectar a RPi ao ESP32
 #define RPI_PIN_ANOMALIA 6  //
 #define RPI_PIN_PAUSA 7     //
 
@@ -76,22 +74,78 @@ unsigned long X_DURACAO_MS = 2000;  // Duração base do movimento (X) em miliss
 // Variáveis de tempo
 unsigned long tempoInicioRotina = 0;
 
-// NOVO: Quantas vezes a rotina vai repetir?
-int NUM_CICLOS_QUEIMA = 1;  // Ex: Vai e volta 3 vezes
+// Quantas vezes a rotina vai repetir?
+int NUM_CICLOS_QUEIMA = 1;  
 int contadorCiclos = 0;     // Variável interna para contar
 
 // --- Variáveis do Watchdog Failsafe ---
 unsigned long ultimoPacoteRecebido = 0;
 #define WATCHDOG_TIMEOUT 500  // 500ms. Se não receber nada, para.
 
+// Flag para interrupção (volatile é obrigatório aqui)
+volatile bool anomaliaDetectada = false;
+
+// Controle de Rampa
+float velocidadeAtual = 0; // Float para suavidade matemática
+int velocidadeAlvo = 0;    // Onde queremos chegar
+
+// Rampa de aceleração
+const float PASSO_ACELERACAO = 2.5; // Incremento por ciclo
+const float PASSO_FREIO = 8.0;      // Freio deve ser mais forte que aceleração
+
 // --- Funções Auxiliares de Controle ---
 
-void moverRobo(int velocidade) {
-  if (velocidade > 0) {
+// Função chamada IMEDIATAMENTE quando o pino da Rasp sobe (Rising)
+void IRAM_ATTR isrAnomalia() {
+  anomaliaDetectada = true;
+}
+
+
+void moverRobo(int alvo) {
+  velocidadeAlvo = alvo;
+  // Nota: Não damos analogWrite aqui! Só definimos a meta.
+}
+
+void atualizarRampaMotores() {
+  // Se já estamos na velocidade certa, não faz nada
+  if ((int)velocidadeAtual == velocidadeAlvo) return;
+
+  // --- Lógica de Aceleração/Desaceleração ---
+  if (velocidadeAtual < velocidadeAlvo) {
+    // Precisamos acelerar (ou ré para frente)
+    if (velocidadeAtual < 0 && velocidadeAlvo > velocidadeAtual) {
+       // Estamos indo de ré para parar ou avançar -> É FREIO/REVERSÃO
+       velocidadeAtual += PASSO_FREIO;
+    } else {
+       // Aceleração normal
+       velocidadeAtual += PASSO_ACELERACAO;
+    }
+    
+    // Não deixa passar do alvo
+    if (velocidadeAtual > velocidadeAlvo) velocidadeAtual = velocidadeAlvo;
+  } 
+  else if (velocidadeAtual > velocidadeAlvo) {
+    // Precisamos desacelerar (ou frente para ré)
+    if (velocidadeAtual > 0 && velocidadeAlvo < velocidadeAtual) {
+       // Estamos indo de frente para parar ou ré -> É FREIO/REVERSÃO
+       velocidadeAtual -= PASSO_FREIO;
+    } else {
+       // Aceleração em ré (negativo ficando mais negativo)
+       velocidadeAtual -= PASSO_ACELERACAO;
+    }
+
+    // Não deixa passar do alvo
+    if (velocidadeAtual < velocidadeAlvo) velocidadeAtual = velocidadeAlvo;
+  }
+
+  // Aplica fisicamente aos motores
+  int pwmSaida = (int)velocidadeAtual;
+
+  if (pwmSaida > 0) {
     analogWrite(MOTOR_AVANCO, 0);
-    analogWrite(MOTOR_RECUO, velocidade);
-  } else if (velocidade < 0) {
-    analogWrite(MOTOR_AVANCO, abs(velocidade));
+    analogWrite(MOTOR_RECUO, pwmSaida);
+  } else if (pwmSaida < 0) {
+    analogWrite(MOTOR_AVANCO, abs(pwmSaida));
     analogWrite(MOTOR_RECUO, 0);
   } else {
     analogWrite(MOTOR_AVANCO, 0);
@@ -128,8 +182,7 @@ void ativarMacarico(bool ligar) {
   }
 }
 
-// NOVO: --- FUNÇÃO PRINCIPAL DE GERENCIAMENTO DA ROTINA DE QUEIMA (NÃO-BLOQUEANTE) ---
-
+//ROTINA DE QUEIMA (NÃO-BLOQUEANTE)
 void gerenciarRotinaDeQueima() {
   unsigned long tempoDecorrido = millis() - tempoInicioRotina;
   Serial.print("\r");
@@ -206,6 +259,10 @@ void setup() {
   // Assumindo que a RPi envia HIGH (3.3V) para ativar e LOW (0V) em repouso.
   pinMode(RPI_PIN_ANOMALIA, INPUT_PULLDOWN);
   pinMode(RPI_PIN_PAUSA, INPUT_PULLDOWN);
+
+  // Configura a interrupção: 
+  // RISING = dispara quando o sinal vai de LOW para HIGH
+  attachInterrupt(digitalPinToInterrupt(RPI_PIN_ANOMALIA), isrAnomalia, RISING);
 
   pararTodosMotoresAtuadores();  // Garante que tudo começa desligado
 
@@ -312,49 +369,64 @@ void loop() {
       gerenciarRotinaDeQueima();
       return;
     } else {
-      // Se não está queimando, lê os pinos da RPi
-      bool sinalAnomalia = (digitalRead(RPI_PIN_ANOMALIA) == HIGH);
-      bool sinalPausa = (digitalRead(RPI_PIN_PAUSA) == LOW);
+      // Se não está queimando
 
-      if (sinalAnomalia) {
+      if (anomaliaDetectada) {
+        anomaliaDetectada = false; // Reseta a flag imediatamente
         // ANOMALIA DETECTADA!
         Serial.println("\nAnomalia detectada! Iniciando ciclo de queima.");
-        moverRobo(0);          // 1. Para o robô
-        ativarMacarico(true);  // 2. Liga o maçarico
+
+        // COMPENSAÇÃO DE ATRASO
+        // Para o movimento de inspeção imediatamente
+        moverRobo(0);
+
+        // Recua o robô pelo tempo exato do delay da Rasp para centralizar na anomalia
+        // Se o robô avança com V_VELOCIDADE_PWM, recuamos com a mesma intensidade
+        moverRobo(-V_VELOCIDADE_PWM); 
+        delay(COMPENSACAO_ATRASO_MS); 
+        moverRobo(0);
+
+      
+        ativarMacarico(true);  // Liga o maçarico
 
         // 3. Inicializa a Máquina de Estados de Queima
         tempoInicioRotina = millis();
         estadoQueimaAtual = INICIO_RECUO;
         Serial.println("Rotina Queima: FASE 1 -> RECUO (X).");
-      } else if (sinalPausa) {
-        // RASP MANDOU PARAR (sem anomalia)
-        
-        pararTodosMotoresAtuadores();
-
-        // 2. Lógica Anti-Spam: Só printa se passou 1 segundo (1000ms)
-        static unsigned long timerPausa = 0; // 'static' memoriza o valor entre loops
-
-        if (millis() - timerPausa > 1000) {
-          timerPausa = millis(); // Atualiza o relógio
-           
-          Serial.println("Pausado");
-        }
       } else {
-        // NENHUM SINAL (anomalia=LOW, pausa=LOW)
-        // Modo de inspeção: movimento constante
+        // Lógica de Pausa e Inspeção
+      
+        bool sinalPausa = (digitalRead(RPI_PIN_PAUSA) == LOW);
+      
+        if (sinalPausa) {
+          // RASP MANDOU PARAR (sem anomalia)
         
-        //moverRobo(VELOCIDADE_INSPECAO);
-        moverRobo(V_VELOCIDADE_PWM);
+          pararTodosMotoresAtuadores();
 
-        // 2. Lógica Anti-Spam: Só printa se passou 1 segundo (1000ms)
-        static unsigned long timerInspecao = 0; // 'static' memoriza o valor entre loops
-        
-        if (millis() - timerInspecao > 1000) {
-           timerInspecao = millis(); // Atualiza o relógio
-           
-           // Agora sim, pode printar sem travar
-          Serial.print("Movendo (Inspeção): ");
-          Serial.println(V_VELOCIDADE_PWM);
+          // 2. Lógica Anti-Spam: Só printa se passou 1 segundo (1000ms)
+          static unsigned long timerPausa = 0; // 'static' memoriza o valor entre loops
+
+          if (millis() - timerPausa > 1000) {
+            timerPausa = millis(); // Atualiza o relógio
+            
+            Serial.println("Pausado");
+          }
+        } else {
+          // NENHUM SINAL (anomalia=LOW, pausa=LOW)
+          // Modo de inspeção: movimento constante
+          
+          //moverRobo(VELOCIDADE_INSPECAO);
+          moverRobo(V_VELOCIDADE_PWM);
+
+          // 2. Lógica Anti-Spam: Só printa se passou 1 segundo (1000ms)
+          static unsigned long timerInspecao = 0; // 'static' memoriza o valor entre loops
+          
+          if (millis() - timerInspecao > 1000) {
+            timerInspecao = millis(); // Atualiza o relógio
+            
+            // Agora sim, pode printar sem travar
+            Serial.print("Movendo (Inspeção): ");
+            Serial.println(V_VELOCIDADE_PWM);
         }
       }
     }
