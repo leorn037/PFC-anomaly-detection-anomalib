@@ -32,7 +32,7 @@ CONFIG = {
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Cabo',
-    "normal_dir": "data/normal", # Imagens normais para treinamento
+    "normal_dir": "novo/images_2026-02-13_16-57-41", # data/normal # Imagens normais para treinamento
     "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
     "normal_test_dir": "data/test", # Imagens normais para teste
 
@@ -41,7 +41,8 @@ CONFIG = {
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
-    "evaluate": False, 
+    "evaluate": False,
+    "use_openvino": True,
 
     "operation_mode" : 'Train', # Operação com modelo ('Inference','Train')
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp

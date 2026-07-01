@@ -11,7 +11,7 @@ from cabo_tracker import CaboTracker
 
 def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 70):
     """
-    Codifica (JPEG), serializa (pickle) e envia um frame (com cabeçalho de tamanho)
+    Codifica (JPEG) e envia um frame (com cabeçalho de tamanho)
     através de um socket TCP.
 
     Levanta uma exceção (BrokenPipeError, etc.) se a conexão falhar.
@@ -29,9 +29,9 @@ def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 70):
     # Isso reduz o tamanho da imagem antes de enviar pela rede.
     _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     
-    # 2. Serializa os dados (pickle)
-    # Converte o array NumPy da imagem codificada em um fluxo de bytes.
-    data = pickle.dumps(encoded_image)
+    # 2. Converte o array numpy diretamente para bytes (Zero Copy overhead)
+    # Antes você fazia pickle.dumps(encoded_image), que é lento.
+    data = encoded_image.tobytes()
     
     # 3. Prepara o cabeçalho de tamanho (4 bytes, unsigned int)
     # Isso informa ao receptor (PC) exatamente quantos bytes ele deve esperar.
@@ -144,7 +144,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             if decoded_image is None: continue
             
             # Exibe a imagem
-            resized_image = cv2.resize(decoded_image, (decoded_image.shape[0] * 2,decoded_image.shape[1] * 2), interpolation=cv2.INTER_LINEAR)
+            resized_image = cv2.resize(decoded_image, (decoded_image.shape[1] * 2, decoded_image.shape[0] * 2), interpolation=cv2.INTER_LINEAR)
             cv2.imshow("Recepcao de Imagens", resized_image)
 
             key = cv2.waitKey(1) & 0xFF
@@ -201,20 +201,7 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
         print(f"{Colors.RED}Erro: Arquivo do modelo não encontrado em {model_path}{Colors.RESET}")
         return
 
-    # 1. Leia o arquivo do modelo em formato de bytes
-    with open(model_path, 'rb') as f:
-        model_bytes = f.read()
-
     # 2. Reúna todas as informações em um único dicionário
-    model_name = config["model_name"]
-    payload = {
-        'model_name': model_name,
-        'model_params': model_configs[model_name]["params"],
-        'model_inference_params': model_configs[model_name].get("inference_params", {}),
-        'model_file': model_bytes,
-    }
-
-
     model_name = config["model_name"]
     file_size = os.path.getsize(model_path)
     
@@ -376,52 +363,50 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
         
         while True:
             # 1. Captura o frame da câmera
+            start_time = time.time()
             frame = picam2.capture_array()
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
             frame_bgr = tracker.track(frame_bgr)
-            start_time = time.time()
+            
 
             send_tcp_frame(conn, frame_bgr)
+
             # 4. Espera a resposta do PC
-            conn.settimeout(120)
+            conn.settimeout(5.0)
             try:
                 response_bytes = conn.recv(1)
                 if not response_bytes:
                     print(f"{Colors.YELLOW}Conexão encerrada pelo PC.{Colors.RESET}")
                     break
                 
-                if response_bytes not in (b'A', b'N',b'P',b'Q'):
+                if response_bytes ==b'P':
+                    if move_output: 
+                        status = f"{Colors.YELLOW}Pausado{Colors.RESET}"
+                        move_output.off()
+                elif response_bytes == b'A':
+                    status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}"
+                    
+                    if anomaly_output:
+                        anomaly_output.on() # Define o pino para HIGH (3.3V)
+                        anomaly_output.off()
+                        print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino GPIO {anomaly_output.pin.number}.")
+                    else:
+                        print(f"[{Colors.YELLOW}GPIO{Colors.RESET}] Aviso: Sinal não enviado (Inicialização do pino falhou).")
+                elif response_bytes == b'N':
+                    status = f"{Colors.GREEN}NORMAL{Colors.RESET}"
+                    if move_output: move_output.on() # Continua andando
+                    if anomaly_output: anomaly_output.off()
+                    print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino GPIO {anomaly_output.pin.number}.")
+                    
+                elif response_bytes == b'Q':
+                    break
+                else:
                     print(f"[{Colors.RED}Dessincronização!{Colors.RESET}] Resposta inválida recebida do PC: {response_bytes}")
                     print(f"[{Colors.RED}Erro{Colors.RESET}] O PC pode estar em uma fase diferente. Encerrando inferência.")
                     return 'DISCONNECTED'
-                
-                if response_bytes == b'Q': return print("Q")
 
-                is_anomaly = response_bytes == b'A'
                 end_time = time.time()
-
-                status = f"{Colors.RED}ANOMALIA DETECTADA!{Colors.RESET}" if is_anomaly else f"{Colors.GREEN}NORMAL{Colors.RESET}"
-                
-                if anomaly_output is None:
-                    # Se a inicialização falhou (por exemplo, falta de permissão ou pino inválido), apenas imprime
-                    print(f"[{Colors.YELLOW}GPIO{Colors.RESET}] Aviso: Sinal não enviado (Inicialização do pino falhou).")
-                elif is_anomaly:
-                    anomaly_output.on() # Define o pino para HIGH (3.3V)
-                    print(f"[{Colors.RED}GPIO{Colors.RESET}] Sinal HIGH (ANOMALIA) enviado para o pino GPIO {anomaly_output.pin.number}.")
-                    time.sleep(0.2)
-                    anomaly_output.off()
-                    print()
-                elif response_bytes == b'P':
-                    if move_output: 
-                        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] PAUSADO")
-                        status = f"{Colors.YELLOW}Pausado{Colors.RESET}"
-                        move_output.off()
-                else:
-                    anomaly_output.off() # Define o pino para LOW (0V)
-                    move_output.on()
-                    print(f"[{Colors.GREEN}GPIO{Colors.RESET}] Sinal LOW (NORMAL) enviado para o pino GPIO {anomaly_output.pin.number}.")
-
                 print(f"Inferência concluída em {(end_time - start_time):.2f}s. Status: {status}")
             
             except socket.timeout:

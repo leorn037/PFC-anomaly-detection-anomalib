@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional, Tuple
+import time
 
 class CaboTracker:
     def __init__(self, crop_output_size: int | None = None):
@@ -13,18 +14,16 @@ class CaboTracker:
         """
         self.crop_output_size = crop_output_size
 
-        # --- LIMITES RÍGIDOS PARA AS COORDENADAS X ---
-        self.x_min = 280
-        self.x_max = 360
-
-        self.MIN_CABLE_WIDTH = 70
+        self.MIN_CABLE_WIDTH = 80
+        self.MAX_CABLE_WIDTH = 110
 
         self.margin_percent = 0.05  # de cada lado
-        
-        # Parâmetros de tracking
-        self.alpha_mask = 0.3  # Peso da média exponencial
-    
-         
+
+        # ROI DINÂMICA (MEMÓRIA) ---
+        self.last_center_x = None  # Começa vazia pois não sabemos onde está o cabo
+        self.roi_window = 100      # Olha 100px para cada lado (Total 200px de largura)
+        self.last_width = self.MIN_CABLE_WIDTH
+     
     def track(self, frame_bgr: np.ndarray, debug_show_steps: bool = False) -> np.ndarray:
         """
         Processa frame único com todas as técnicas de estabilização.
@@ -39,7 +38,7 @@ class CaboTracker:
         h, w, _ = frame_bgr.shape
         
         # 2. FUNÇÃO CENTRALIZAR
-        final_frame, left, right = self._centralizar_cabo(frame_bgr, self.crop_output_size, debug=False)
+        final_frame, left, right = self._centralizar_cabo(frame_bgr, self.crop_output_size, debug=True)
 
         if debug_show_steps:
             self._debug_visualization(frame_bgr,left, right)
@@ -51,7 +50,7 @@ class CaboTracker:
         cv2.line(debug_img, (right, 0), (right, h_roi), (0, 255, 0), 3)
         
 
-        return final_frame
+        return final_frame #debug_img
     
     def _centralizar_cabo(self, frame_roi: np.ndarray, crop_output_size: int | None, debug: bool = False):
 
@@ -59,12 +58,30 @@ class CaboTracker:
 
         self.gray = cv2.cvtColor(frame_roi, cv2.COLOR_BGR2GRAY)
 
+        # APLICAÇÃO DA ROI DINÂMICA
+        if self.last_center_x is not None:
+            # Define os limites da janela de busca
+            x_start = max(0, self.last_center_x - self.roi_window)
+            x_end = min(w_roi, self.last_center_x + self.roi_window)
+            
+            # Pinta de PRETO (0) tudo que está fora da janela
+            # Isso "apaga" a escada e a parede antes do Canny rodar
+            self.gray[:, :x_start] = 0  # Zera esquerda
+            self.gray[:, x_end:] = 0    # Zera direita
+            
+            if debug: print(f"ROI Dinâmica: Buscando entre {x_start} e {x_end}")
+        else:
+            self.last_center_x = w_roi // 2
+            
+        #!self.gray = self._aplicar_clahe(self.gray)
+        # APLICA BLUR APENAS VERTICAL: 
+        self.gray = self._linearizar_trancado(self.gray)
         # 1. CANNY (robusto a borrão)
         self.edges = cv2.Canny(self.gray, 50, 100, apertureSize=3) 
-
+    
         # 2. HOUGH LINES VERTICAIS
-        lines = cv2.HoughLinesP(self.edges, 1, np.pi/180, threshold=50, 
-                            minLineLength=h_roi*0.4, maxLineGap=50) 
+        lines = cv2.HoughLinesP(self.edges, 1, np.pi/180, threshold=30, 
+                            minLineLength=h_roi*0.1, maxLineGap=50)
 
         self.vertical_lines = []
         self.left_candidates = []   # Bordas esquerdas do cabo
@@ -82,17 +99,7 @@ class CaboTracker:
                         else:
                             self.right_candidates.append(center_x)
 
-
         if debug: print(f"Hough: {len(self.left_candidates)} esquerda(s), {len(self.right_candidates)} direita(s)")
-
-        center_img = w_roi // 2
-        tolerance = 40  # Pixels do centro para IGNORAR
-        # FILTRA candidatos próximos ao centro (ruído)
-        self.left_candidates = [x for x in self.left_candidates if abs(x - center_img) > tolerance]
-        self.right_candidates = [x for x in self.right_candidates if abs(x - center_img) > tolerance]
-
-        if debug: print(f"Hough FILTRADO: {len(self.left_candidates)} Esq, {len(self.right_candidates)} Dir (ignorou ±{tolerance}px centro)")
-
 
         # PRIORIDADE 1: LÓGICA DAS BORDAS
         if self.left_candidates and self.right_candidates:
@@ -108,6 +115,8 @@ class CaboTracker:
             left = int(left_border + margin)
             right = int(right_border - margin)
             
+            cabo_encontrado = True
+
             if debug: print(f"Bordas reais: L={left}, R={right}, largura={right-left}px")
 
         elif self.left_candidates:
@@ -115,6 +124,7 @@ class CaboTracker:
             left_border = max(self.left_candidates)
             left = int(left_border + int(self.MIN_CABLE_WIDTH * self.margin_percent))  # Pequena margem
             right = int(left + self.MIN_CABLE_WIDTH)
+            cabo_encontrado = True
             if debug: print(f"⚠️ SÓ ESQUERDA: L={left}, R={right} (width fixo)")
                 
         elif self.right_candidates:
@@ -122,24 +132,44 @@ class CaboTracker:
             right_border = min(self.right_candidates)
             right = int(right_border - int(self.MIN_CABLE_WIDTH * self.margin_percent))
             left = int(right - self.MIN_CABLE_WIDTH)
+            cabo_encontrado = True
             if debug: print(f"⚠️ SÓ DIREITA: L={left}, R={right} (width fixo)")
                 
         else:
             # NENHUM lado
-            left, right = self.x_min, self.x_max
-            if debug: print("❌ SEM BORDAS: usando zona completa")
+            cabo_encontrado=False
+            half_w = self.last_width // 2
+            left = max(0, self.last_center_x - half_w)
+            right = min(w_roi, self.last_center_x + half_w)
+            if debug: print("❌ SEM BORDAS: usando ultima posição")
 
         largura_atual = right - left
+
+        if largura_atual > self.MAX_CABLE_WIDTH:
+                # Calcula distâncias para o centro esperado
+                dist_l = abs(self.last_center_x - left)
+                dist_r = abs(self.last_center_x - right)
+
+                if dist_l < dist_r:
+                    # A linha da ESQUERDA é a verdadeira (está mais perto do histórico)
+                    right = left + self.MIN_CABLE_WIDTH # Completa artificialmente a direita
+                    if debug: print(f"⚠️ Largura {largura_atual}px > Max. Salvando lado ESQ (Dist {dist_l} vs {dist_r})")
+                else:
+                    # A linha da DIREITA é a verdadeira
+                    left = right - self.MIN_CABLE_WIDTH # Completa artificialmente a esquerda
+                    if debug: print(f"⚠️ Largura {largura_atual}px > Max. Salvando lado DIR (Dist {dist_r} vs {dist_l})")
+                
+                cabo_encontrado = True
+
 
         if largura_atual < self.MIN_CABLE_WIDTH:
             if debug: print(f"🔧 EXPANDINDO (centrado): {left}→{right} ({largura_atual}px)")
             
             ajuste_total = self.MIN_CABLE_WIDTH - largura_atual
-            center_cut = (left + right) // 2  # CENTRO do corte atual
             
             # DISTÂNCIAS do centro da imagem
-            dist_left = abs(center_img - left)   # Quanto left tá longe do centro
-            dist_right = abs(center_img - right) # Quanto right tá longe do centro
+            dist_left = abs(self.last_center_x - left)   # Quanto left tá longe do centro
+            dist_right = abs(self.last_center_x - right) # Quanto right tá longe do centro
             
             # PRIORIDADE: quem tá MAIS PERTO do centro ganha MAIS expansão
             peso_left = 1.0 / (1 + dist_left * 0.01)   # Perto = peso alto (1.0)
@@ -152,34 +182,22 @@ class CaboTracker:
             if debug: print(f"   Pesos: Esq={peso_left:.2f}, Dir={peso_right:.2f}")
             if debug: print(f"   Ajustes: Esq={ajuste_left}px, Dir={ajuste_right}px")
             
-            # Expansão ESQUERDA (prioridade se perto do centro)
-            espaco_esq = left - self.x_min
-            shift_esq = min(ajuste_left, espaco_esq)
-            left -= shift_esq
-            
-            # Expansão DIREITA
-            espaco_dir = self.x_max - right
-            shift_dir = min(ajuste_right, espaco_dir)
-            right += shift_dir
-            
-            # Sobra vai pro lado com MAIS ESPAÇO (não pro centro)
-            sobra_total = ajuste_total - (shift_esq + shift_dir)
-            if sobra_total > 0:
-                espaco_restante_esq = left - self.x_min
-                espaco_restante_dir = self.x_max - right
-                
-                if espaco_restante_esq >= espaco_restante_dir:
-                    left = max(self.x_min, left - sobra_total)
-                    if debug: print(f"   ↩️ Sobra {sobra_total}px → ESQUERDA (mais espaço)")
-                else:
-                    right = min(self.x_max, right + sobra_total)
-                    if debug: print(f"   ↪️ Sobra {sobra_total}px → DIREITA (mais espaço)")
+            # Aplica expansão direta (respeitando apenas a borda da imagem 0 e w_roi)
+            left = max(0, left - ajuste_left)
+            right = min(w_roi, right + ajuste_right)
             
             if debug: print(f"✅ FINAL: {left}→{right} ({right-left}px)")
 
         if debug: print(f"Largura final do corte: {right - left}px")
-        cropped = frame_roi[:, left:right]
 
+        print(f'{cabo_encontrado=}')
+        if cabo_encontrado:
+            # Sucesso: Atualiza memória
+            self.last_center_x = (left + right) // 2
+            self.last_width = right - left
+            # Usa a última largura conhecida centrada na última posição
+
+        cropped = frame_roi[:, left:right]
         if crop_output_size:
             # Cria um "Canvas" (Fundo) preto quadrado do tamanho final
             canvas = np.zeros((crop_output_size, crop_output_size, 3), dtype=np.uint8)
@@ -194,8 +212,24 @@ class CaboTracker:
             x_off, y_off = (crop_output_size - new_w) // 2, (crop_output_size - new_h) // 2
             # Cola a imagem redimensionada no centro do canvas
             canvas[y_off:y_off+new_h, x_off:x_off+new_w] = resized
-        
+
         return canvas, left, right
+
+    def _aplicar_clahe(self, imagem_gray):
+        # clipLimit: quanto de contraste adicionar (2.0 a 4.0 é bom)
+        # tileGridSize: tamanho da janela local (8x8 é padrão)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        
+        gray_melhorado = clahe.apply(imagem_gray)
+        return gray_melhorado
+
+    def _linearizar_trancado(self, imagem_gray):
+        # Kernel (1, 51) significa: 1px de largura, 51px de altura.
+        # Isso borra tudo violentamente na vertical, transformando a senóide numa "coluna".
+        # Aumente o 51 se a ondulação for muito "longa".
+        kernel_vertical = (1, 51) 
+        blur_vertical = cv2.blur(imagem_gray, kernel_vertical)
+        return blur_vertical
 
     def _debug_visualization(self,  frame_roi: np.ndarray, 
                                     left: int, right: int):
@@ -219,7 +253,6 @@ class CaboTracker:
         ax_img.imshow(cv2.cvtColor(frame_roi, cv2.COLOR_BGR2RGB))
         ax_img.axvline(left, color='lime', linewidth=1, label=f'Corte Final\n({left}-{right}px)')
         ax_img.axvline(right, color='lime', linewidth=1)
-        ax_img.axvspan(self.x_min, self.x_max, color='yellow', alpha=0.2, label='Zona Permitida')
         ax_img.set_title("1. FRAME COMPLETO\n(ROI + Cortes)")
         ax_img.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         
@@ -283,9 +316,6 @@ class CaboTracker:
         ax_supp.axvline(left, color='lime', linewidth=1, label=f'Corte {left}-{right}px')
         ax_supp.axvline(right, color='lime', linewidth=1)
 
-        # Zona de análise
-        ax_supp.axvspan(self.x_min, self.x_max, color='yellow', alpha=0.2, label='Zona Análise (20-80%)')
-
         ax_supp.grid(True, alpha=0.3)
         ax_supp.set_title("6. PERFIS Hough + Canny")
         ax_supp.legend(fontsize='small')
@@ -310,7 +340,7 @@ class CaboTracker:
                 # Windows
                     
         plt.show()
-    
+
     def reset(self):
         """Reset estado para nova sessão."""
         print("Tracker resetado")

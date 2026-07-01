@@ -5,34 +5,59 @@ import numpy as np
 import time
 from utils import Colors
 import cv2
+from anomalib.deploy import OpenVINOInferencer
 
 ANOMALY_SCORE = 1.0
 
 def predict_image(model, image, transform, image_size):
 
-    input_tensor = transform(image).unsqueeze(0) # Adiciona dimensão de batch
-    
-    with torch.no_grad():
-        predictions = model.forward(input_tensor.to(model.device))
-
-    # pred_score é um tensor (1,)
-    pred_score = predictions.pred_score.cpu().item()
-
-    try:
-        # Se o modelo retornar um mapa de anomalia, use-o
-        anomaly_map = predictions.anomaly_map.cpu().squeeze().numpy()
-    except AttributeError:
-        # Se o modelo NÃO retornar, crie um mapa preto (array de zeros)
-        anomaly_map = np.zeros((image_size, image_size), dtype=np.float32)
+    if isinstance(model, OpenVINOInferencer):
+        # OpenVINO espera Numpy Array, mas sua entrada original é PIL
+        image_numpy = np.array(image) if isinstance(image, Image.Image) else image
         
-    # 3. Extrair ou criar placeholder para a máscara de anomalia
-    try:
-        # Se o modelo retornar uma máscara, use-a
-        pred_mask = predictions.pred_mask.cpu().squeeze().numpy().astype(np.uint8) * 255
-    except AttributeError:
-        # Se o modelo NÃO retornar, crie uma máscara preta (array de zeros)
-        pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
-    
+        # O OpenVINO faz o resize/normalize internamente usando metadata
+        predictions = model.predict(image=image_numpy)
+        
+        # Extração dos resultados
+        pred_score = predictions.pred_score.item()
+        print(f"{pred_score=}")
+        
+        # Mapa de Calor (Heat Map)
+        if predictions.anomaly_map is not None:
+            anomaly_map = np.squeeze(predictions.anomaly_map)
+        else:
+            anomaly_map = np.zeros((image_size, image_size), dtype=np.float32)
+        print(f'{anomaly_map.ndim=}')
+        # Máscara de Segmentação
+        if predictions.pred_mask is not None:
+            pred_mask = np.squeeze((predictions.pred_mask.astype(np.uint8) * 255))
+        else:
+            pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
+        print(f'{pred_mask.ndim=}')
+
+    else:
+        input_tensor = transform(image).unsqueeze(0) # Adiciona dimensão de batch
+        with torch.no_grad():
+            predictions = model.forward(input_tensor.to(model.device))
+
+        # pred_score é um tensor (1,)
+        pred_score = predictions.pred_score.cpu().item()
+
+        try:
+            # Se o modelo retornar um mapa de anomalia, use-o
+            anomaly_map = predictions.anomaly_map.cpu().squeeze().numpy()
+        except AttributeError:
+            # Se o modelo NÃO retornar, crie um mapa preto (array de zeros)
+            anomaly_map = np.zeros((image_size, image_size), dtype=np.float32)
+            
+        # 3. Extrair ou criar placeholder para a máscara de anomalia
+        try:
+            # Se o modelo retornar uma máscara, use-a
+            pred_mask = predictions.pred_mask.cpu().squeeze().numpy().astype(np.uint8) * 255
+        except AttributeError:
+            # Se o modelo NÃO retornar, crie uma máscara preta (array de zeros)
+            pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
+        
     return image, anomaly_map, pred_score, pred_mask
 
 def apply_pred_mask_on_image(image, pred_mask, color=(0,0,255)):
@@ -69,7 +94,7 @@ def visualize_imgs(path_dir, model, img_class, image_size):
         img_class (str): O nome da classe de imagem (ex: "normal", "anomalia").
         image_size (int): O tamanho da imagem para redimensionamento.
     """
-    model.eval()
+    if hasattr(model, 'eval'): model.eval() # Coloca o modelo em modo de avaliação
 
     # Certifique-se de que as transformações correspondem às usadas no datamodule
     transform = v2.Compose([
@@ -89,14 +114,13 @@ def visualize_imgs(path_dir, model, img_class, image_size):
             original_img, anomaly_map, score, pred_mask = predict_image(model, image, transform, image_size) 
 
             # --- Visualização com OpenCV ---
-            
             # Converte a imagem original para o formato BGR para exibição com cv2
             original_img_cv2 = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
             original_img_cv2 = apply_pred_mask_on_image(original_img_cv2, pred_mask, color=(0,0,255))
 
             # Redimensiona o mapa de anomalia para o tamanho da imagem original
             anomaly_map_resized = cv2.resize(anomaly_map, (original_img_cv2.shape[1], original_img_cv2.shape[0]))
-            
+            print(2)
             # Normaliza o mapa de anomalia para o intervalo 0-255 e aplica um colormap
             anomaly_map_normalized = (anomaly_map_resized * 255).astype(np.uint8)
             anomaly_map_color = cv2.applyColorMap(anomaly_map_normalized, cv2.COLORMAP_JET)
@@ -354,18 +378,52 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
     """
     import struct
     import socket
-    import pickle
     from datetime import datetime
     from pathlib import Path
     import os
+    import threading
+    import queue
 
     # --- Configuração de Consenso ---
     CONSECUTIVE_ANOMALY_LIMIT = 1 # Limite de flags seguidas
     anomaly_streak = 0            # Contador de flags consecutivas
-    is_anomaly_confirmed = False  # Flag para o sinal a ser enviado para a Pi
-    
+    inference_count = 0
+
     image_size = config["image_size"]
 
+    # CONFIGURAÇÃO DA THREAD
+    # Cria a fila. 'maxsize=0' significa tamanho infinito (cuidado com memória RAM)
+    image_save_queue = queue.Queue(maxsize=50)
+
+    def worker_save_images():
+        """
+        Esta função roda em uma linha do tempo paralela (Thread).
+        Ela fica em loop infinito esperando algo cair na fila para salvar.
+        """
+        print(f"[{Colors.GREEN}THREAD{Colors.RESET}] Worker de salvamento iniciado.")
+        
+        while True:
+            # 1. Pega o item da fila (Bloqueia se estiver vazia, esperando chegar algo)
+            item = image_save_queue.get()
+            
+            if item is None: break # Sinal para matar a thread quando fechar o programa
+            
+            # Desempacota os dados que você mandou
+            filepath, image = item
+            
+            try:
+                # 2. A operação lenta acontece AQUI, sem travar o robô
+                cv2.imwrite(filepath, image)
+                # print(f"Salvo: {filepath}") # Opcional (prints gastam tempo também)
+            except Exception as e:
+                print(f"Erro ao salvar imagem: {e}")
+            finally:
+                # Avisa a fila que esse item foi processado
+                image_save_queue.task_done()
+
+    # Inicia a Thread assim que o programa começa
+    save_thread = threading.Thread(target=worker_save_images, daemon=True)
+    save_thread.start()
     # --- Lógica de criação de diretório de inferência ---
     # 1. Obtém a data e hora atuais
     current_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -382,7 +440,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
         v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    model.eval() # Coloca o modelo em modo de avaliação
+    if hasattr(model, 'eval'): model.eval() # Coloca o modelo em modo de avaliação
     
     if not sock:
         print(f"[{Colors.RED}Erro{Colors.RESET}] Conexão de rede não estabelecida. Abortando coleta.")
@@ -396,7 +454,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             sock.sendall(command.encode('utf-8'))
             
             sock.settimeout(None) # Timeout para a resposta ACK
-            response = sock.recv(16).decode().strip()
+            response = sock.recv(3).decode().strip()
             
             if response == "ACK":
                 print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
@@ -411,11 +469,10 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Erro inesperado: {e}")
             return
         
-    inference_count = 0
     # Loop principal de inferência
-
-    while True:
-        try:    
+    decision_buffer = None
+    try:    
+        while True:
             start_time = time.time()
             # 1. Recebe o tamanho da imagem
             image_size_data = sock.recv(4)
@@ -427,15 +484,31 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             # 2. Recebe a imagem completa
             image_data = b''
             while len(image_data) < message_size:
-                packet = sock.recv(message_size - len(image_data))
+                packet = sock.recv(min(message_size - len(image_data), 4096))
                 if not packet: break
                 image_data += packet
             
             if not image_data: break
+
+# --- RAIO-X DOS BYTES (COLOQUE ISSO AQUI) ---
+            print(f"-> Esperado: {message_size} bytes | Recebido: {len(image_data)} bytes")
+            if len(image_data) >= 4:
+                # Todo JPEG no planeta TEM que começar com \xff\xd8
+                print(f"-> Assinatura do Arquivo (Primeiros 4 bytes): {image_data[:4]}")
             
-            # 3. Deserializa e decodifica a imagem
-            encoded_image = pickle.loads(image_data)
-            decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+            # Trava de segurança: Se não recebeu tudo, aborta esse frame!
+            if len(image_data) < message_size:
+                print(f"[{Colors.YELLOW}REDE{Colors.RESET}] Pacote incompleto. Ignorando frame.")
+                sock.sendall(b'N') 
+                continue
+            # -------------------------------------------
+            
+            print(message_size)
+            
+            # Transforma os bytes crus da rede diretamente em um array numpy
+            np_arr = np.frombuffer(image_data, dtype=np.uint8)
+            # Decodifica o JPEG para Matriz de Imagem (BGR)
+            decoded_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
             # 4. Executa a inferência
             original_img_pil = Image.fromarray(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB))
@@ -445,14 +518,30 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
             # is_anomaly = check_for_anomaly_by_area(pred_mask, 100, threshold)
 
-            # --- Lógica de Consenso (A Nova Lógica) ---
-            if is_anomaly:
-                anomaly_streak += 1
-                if anomaly_streak >= CONSECUTIVE_ANOMALY_LIMIT:
-                    is_anomaly_confirmed = True # Confirma que a anomalia é persistente
+            # !LÓGICA DE DECISÃO E RESPOSTA
+            response = b'N'
+            # CASO 1: O humano apertou algo no frame anterior?
+            if decision_buffer == 'A':
+                response = b'A' # Trava total
+                decision_buffer = None
+                print(f"[{Colors.RED}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
+            elif decision_buffer == 'N':
+                response = b'N' # Libera
+                anomaly_streak = 0 # Reseta contagem da IA
+                decision_buffer = None # Consumimos o comando, volta a monitorar
+                print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
             else:
-                anomaly_streak = 0 # Reseta a contagem se for um frame normal
-                is_anomaly_confirmed = False # Garante que a flag seja desligada imediatamente se o score cair
+                # --- Lógica de Consenso ---
+                if is_anomaly:
+                    anomaly_streak += 1
+                    if anomaly_streak >= CONSECUTIVE_ANOMALY_LIMIT:
+                        response = b'P'
+                        print("Pausa para confirmação")
+                else:
+                    anomaly_streak = 0 # Reseta a contagem se for um frame normal
+
+            # Envio imediato da resposta
+            sock.sendall(response)
 
             # Pós-processamento para visualização com OpenCV:
             anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
@@ -465,20 +554,21 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
             # Salva as imagens
             timestamp = int(time.time() * 1000)
-            cv2.imwrite(str(inference_dir / f"{inference_count:04d}_{timestamp}_original.jpg"), decoded_image)
-            cv2.imwrite(str(inference_dir / f"{inference_count:04d}_{timestamp}_anomaly_map_{pred_score:.4f}.jpg"), anomaly_map_colored)
-            print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
+            fname_original = str(inference_dir / f"{inference_count:04d}_{timestamp}_original.jpg")
+            fname_map = str(inference_dir / f"{inference_count:04d}_{timestamp}_anomaly_map_{pred_score:.4f}.jpg")
+                                  
+            try:
+                image_save_queue.put((fname_original, decoded_image.copy()), block=False)
+                image_save_queue.put((fname_map, anomaly_map_colored.copy()), block=False)
+                print(f"Imagens enviadas para fila (Frame {inference_count})")
+            except queue.Full:
+                print("Aviso: Fila de salvamento cheia, pulando este frame.")
+            
+            #cv2.imwrite(fname_original, decoded_image)
+            #cv2.imwrite(fname_map, anomaly_map_colored)
+            #print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
 
             inference_count += 1
-
-            # Adiciona o score na imagem original para display
-            cv2.putText(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), 
-                        f"Score: {pred_score:.4f}", 
-                        (10, 30), # Posição do texto
-                        cv2.FONT_HERSHEY_SIMPLEX, 
-                        1,        # Tamanho da fonte
-                        (0, 255, 0), # Cor verde (BGR)
-                        2)        # Espessura da linha
 
             decoded_image = apply_pred_mask_on_image(decoded_image, pred_mask, color=(0,0,255))
 
@@ -486,48 +576,48 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             new_size = 640
             combined_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
 
-            if is_anomaly_confirmed:
-                print("Pausa para confirmação")
-                response = b'P'
+            # Desenha status na tela
+            color = (0,0,255) if response in [b'P', b'A'] else (0,255,0)
+            text = f"Score: {pred_score:.4f}"
+            cv2.putText(combined_frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            # Adiciona o score na imagem original para display
+            cv2.putText(cv2.cvtColor(decoded_image, cv2.COLOR_BGR2RGB), text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+            if response == b'P':
                 cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 2)
             
-            cv2.imshow("Inferencia em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
-
+            cv2.imshow("Inferencia (Original | Mapa de Anomalia)", combined_frame)
+            
+            # LEITURA DE TECLADO 
             key = cv2.waitKey(1) & 0xFF 
 
             # Saída ao pressionar 'q'
             if key == ord('q'):
+                sock.sendall(b'Q')
                 print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
                 break
-            
-            if is_anomaly_confirmed:
+            elif response in [b'P', b'A']:
+                # Se apertar tecla, armazena para o PRÓXIMO loop
                 if key == ord('y'):
-                    print(f"[{Colors.RED}Operador{Colors.RESET}] Anomalia CONFIRMADA.")
-                    response = b'A'
+                    decision_buffer = 'A'
                 elif key == ord('n'):
-                    print(f"[{Colors.YELLOW}Operador{Colors.RESET}] Anomalia REJEITADA (Falso Positivo).")
-                    anomaly_streak = 0
-                    is_anomaly_confirmed = False # SOBRESCREVE a decisão do modelo
-                    response = b'N'
-            else:
-                response = b'N'
+                    decision_buffer = 'N'
 
-            # 6. Envia a flag de volta para a Raspberry Pi
-            ##response = b'A' if is_anomaly_confirmed else b'N'
-            sock.sendall(response)
+            is_anomaly = response in [b'P', b'A']
+            print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
 
-            print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly_confirmed}. Enviando flag...")
-
-        except socket.timeout:
-            print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")
-        except ConnectionResetError:
-            print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
-            break
-        except Exception as e:
-            print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
-            raise e
-            
-    cv2.destroyAllWindows()
+    except socket.timeout:
+        print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")
+    except ConnectionResetError:
+        print(f"{Colors.YELLOW}Conexão com a Raspberry Pi encerrada. Reiniciando...{Colors.RESET}")
+    except Exception as e:
+        print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+        raise e
+    finally:
+        # Limpeza da Thread
+        image_save_queue.put(None)
+        save_thread.join()       
+        cv2.destroyAllWindows()
     
 # Abordagem é a mais simples.
 # Pode ser menos eficaz para anomalias pequenas que não elevam significativamente o score total da imagem.

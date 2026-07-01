@@ -112,6 +112,7 @@ def create_model(config):
     model_name = config.get("model_name")
     ckp_path = config.get("ckpt_path")
     mode = config.get("operation_mode")
+    use_openvino = config.get("use_openvino", False)
 
     image_size = config["image_size"]
     transform= v2.Compose([
@@ -129,21 +130,47 @@ def create_model(config):
     ModelClass = model_info["class"]
     model_params = model_info["params"]
     
-    # Cria um novo modelo para treinamento
-    model = ModelClass(pre_processor=pre_processor, **model_params)
-    
     # 2. Lógica para Treinamento ou Inferência (unificada)
     if mode != 'Inference':
+        # Cria um novo modelo para treinamento
+        model = ModelClass(pre_processor=pre_processor, **model_params)
         print(f"{Colors.GREEN}Modelo de treinamento '{model_name}' criado com sucesso.{Colors.RESET}")
+        return model
     else:
         if not (ckp_path and Path(ckp_path).exists()):
             results_path = Path("results") / config["model_name"] / config["folder_name"]
             ckp_path = get_latest_checkpoint(results_path)
             print(f"{Colors.CYAN}Carregando o ÚLTIMO modelo de {model_name} para inferência de: {ckp_path}{Colors.RESET}")
-        else:
-            # Carrega um modelo existente para inferência
-            print(f"{Colors.CYAN}Carregando o MELHOR modelo de {model_name} para inferência de: {ckp_path}{Colors.RESET}")
         
+        if use_openvino:
+            from anomalib.deploy import OpenVINOInferencer
+            print(f"{Colors.BLUE}Tentando carregar com OpenVINO...{Colors.RESET}")
+            
+            if ckp_path:
+                weights_dir = Path(ckp_path).parent.parent
+                
+                # Procura na subpasta 'openvino' (padrão do anomalib export)
+                ov_xml_path = weights_dir / "openvino" / "model.xml"
+                ov_bin_path = weights_dir / "openvino" / "model.bin"
+
+                if ov_xml_path.exists() and ov_bin_path.exists():
+                    try:
+                        start_time = time.time()
+                        # Instancia o Inferencer Otimizado
+                        model = OpenVINOInferencer(
+                            path=str(ov_xml_path),
+                            device="CPU" # Força CPU (Ideal para seu AMD)
+                        )
+                        load_time = time.time() - start_time
+                        print(f"{Colors.GREEN}SUCESSO: Modelo OpenVINO carregado em {load_time:.2f}s.{Colors.RESET}")
+                        return model # <--- RETORNA AQUI e encerra a função
+                    except Exception as e:
+                        print(f"{Colors.RED}Erro ao carregar OpenVINO: {e}. Caindo para PyTorch...{Colors.RESET}")
+                else:
+                    print(f"{Colors.YELLOW}Arquivos OpenVINO não encontrados em {weights_dir}. Caindo para PyTorch...{Colors.RESET}")
+
+        # Cria a instância vazia primeiro
+        model = ModelClass(pre_processor=pre_processor, **model_params)
         start_time = time.time()
         
         # Junta os parâmetros de treinamento com os de inferência
@@ -156,7 +183,6 @@ def create_model(config):
                     checkpoint_path=ckp_path,
                     **load_params
                 )
-                print('load')
         else:
             print(f"{Colors.YELLOW}AVISO: Modelo '{model_name}' não encontrado. "
                   "O modelo será criado do zero.{Colors.RESET}")
@@ -199,13 +225,6 @@ def evaluate_model(engine, model, datamodule):
     eval_time = end_time - start_time
 
     return test_results, eval_time
-
-def export_model(engine, model, config):
-    from anomalib.deploy import ExportType
-
-    model_type=config["export_type"]
-    export_type = ExportType.ONNX
-    engine.export(model, export_type, export_root='.', model_file_name=f'model_{model_type}',ckpt_path=config["ckpt_path"])
 
 def get_latest_checkpoint(results_path: Path) -> Path:
     """Função auxiliar para encontrar o último checkpoint salvo."""

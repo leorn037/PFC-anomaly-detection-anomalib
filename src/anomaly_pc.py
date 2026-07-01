@@ -33,12 +33,44 @@ def train_and_evaluate(config, model, datamodule):
         print(f"{Colors.BLUE}Iniciando treinamento...{Colors.RESET}")
         engine, training_time = train_model(model, datamodule, config)
         print(f"{Colors.BLUE}Treinamento concluído em {training_time:.2f}s.{Colors.RESET}")
-        
+    
+        print(f"{Colors.BLUE}Exportando para OpenVINO...{Colors.RESET}")
+
         #  Avaliação com métricas (no conjunto de teste preparado)
         if config["evaluate"]:
             print(f"{Colors.BLUE}Iniciando avaliação...{Colors.RESET}")
             test_results, eval_time = evaluate_model(engine, model, datamodule)
             print(f"{Colors.BLUE}Avaliação concluída em {eval_time:.2f}s.{Colors.RESET}")
+                
+        if config.get("use_openvino", False):
+            from anomalib.deploy import ExportType, OpenVINOInferencer
+            # Define onde salvar (cria pasta weights/openvino se não existir)
+            export_root = Path(engine.trainer.default_root_dir)
+
+            exported_path = engine.export(
+                model=model,
+                export_type=ExportType.OPENVINO,
+                export_root=export_root,
+                ckpt_path=None # Usa os pesos atuais na memória
+            )
+
+            # Garante que é um objeto Path
+            exported_path = Path(exported_path) 
+
+            print(f"Modelo exportado para: {exported_path}")
+            
+            print(f"{Colors.GREEN}Carregando OpenVINO Inferencer na memória...{Colors.RESET}")
+
+            # Substituímos o modelo PyTorch pesado pelo OpenVINO leve AGORA
+            ov_model = OpenVINOInferencer(
+                path=exported_path,
+                device="CPU" # Força CPU para seu AMD
+            )
+
+            return ov_model
+
+    # Se não for modo Train ou não usou OpenVINO, retorna o modelo original (PyTorch)
+    return model
 
 def send_trained_model(config):
     """Resgata modelo treinado e envia para Pi se configurado."""
@@ -63,7 +95,7 @@ def run_inference(config, model, sock):
             live_inference_opencv(model, config["image_size"])
     else:
         # Teste offline
-        normal_dir = Path(config["normal_test_dir"])
+        normal_dir = Path(config["normal_dir"])
         img_class="Test"
         visualize_imgs(normal_dir, model, img_class, config["image_size"])
 
@@ -86,12 +118,12 @@ def main():
         receive_path = Path(config["normal_dir"])
         collect_images(config, sock, receive_path)
         
-        # 3. Pipeline de ML
+        # 3. Pipeline de ML, cria modelo ou recupera um checkpoint
         dataset_root = Path(config["dataset_root"])
         datamodule, model = setup_pipeline(config, dataset_root)
         
         # 4. Executar o treinamento/avaliação com as imagens recebidas
-        train_and_evaluate(config, model, datamodule)
+        model = train_and_evaluate(config, model, datamodule)
         
         # 5. Envio do modelo para Raspberry se configurado
         send_trained_model(config)

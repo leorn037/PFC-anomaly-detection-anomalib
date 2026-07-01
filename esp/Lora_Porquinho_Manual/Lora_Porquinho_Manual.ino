@@ -93,13 +93,108 @@ int velocidadeAlvo = 0;    // Onde queremos chegar
 const float PASSO_ACELERACAO = 2.5; // Incremento por ciclo
 const float PASSO_FREIO = 8.0;      // Freio deve ser mais forte que aceleração
 
+// --- Definição do Pacote Binário (4 Bytes) ---
+struct __attribute__((packed)) PacoteComando {
+  char tipo;       // 1 Byte: 'E', 'L', 'A', 'M', 'V'
+  int16_t valor;   // 2 Bytes: Valor numérico (-32768 a 32767)
+  char fim;        // 1 Byte: '\n' (segurança para sincronia)
+};
+
+PacoteComando pacote; // Cria a variável global para receber os dados
+
+
 // --- Funções Auxiliares de Controle ---
+
+void lerSerialBinario() {
+  // 1. Verifica se há pelo menos 4 bytes (tamanho da struct) no buffer
+  if (Serial.available() >= sizeof(PacoteComando)) {
+    
+    // 2. Lê os bytes brutos direto para a memória da struct
+    // Isso é instantâneo, sem conversão de texto.
+    Serial.readBytes((char*)&pacote, sizeof(PacoteComando));
+
+    // 3. Validação de Sincronia
+    // Se o último caractere não for '\n', perdemos o alinhamento (ruído ou erro).
+    if (pacote.fim != '\n') {
+      Serial.println("ERRO: Pacote desalinhado/ruído. Limpando buffer...");
+      // Esvazia o buffer até achar o próximo '\n' ou acabar, para tentar realinhar
+      while(Serial.available() > 0) Serial.read(); 
+      return; // Aborta e tenta na próxima
+    }
+
+    // 4. Processamento dos Comandos (Switch Case é mais rápido que if/else)
+    switch (pacote.tipo) {
+      
+      // --- EMERGÊNCIA ---
+      case 'E': 
+      case 'e':
+        Serial.println("CMD BIN: EMERGENCIA");
+        emergency_stop = true;
+        estadoQueimaAtual = OCIOSO; // Reseta máquina de estados
+        
+        // Para motores imediatamente
+        analogWrite(MOTOR_RECUO, 0);
+        analogWrite(MOTOR_AVANCO, 0);
+
+        analogWrite(ATUADOR_AVANCO, 255);
+        analogWrite(ATUADOR_RECUO, 0);
+        delay(1000); 
+        analogWrite(ATUADOR_AVANCO, 0);
+        break;
+
+      // --- LIBERAR ---
+      case 'L':
+      case 'l':
+        Serial.println("CMD BIN: LIBERADO");
+        emergency_stop = false;
+        
+        analogWrite(ATUADOR_AVANCO, 0);
+        analogWrite(ATUADOR_RECUO, 255);
+        analogWrite(MOTOR_RECUO, 0);
+        analogWrite(MOTOR_AVANCO, 0);
+        delay(1000);
+        analogWrite(ATUADOR_RECUO, 0);
+        break;
+
+      // --- MODO SEMI-AUTOMÁTICO ---
+      case 'A':
+      case 'a':
+        Serial.println("CMD BIN: MODO SEMI-AUTO");
+        modoAtual = SEMI_AUTOMATICO;
+        pararTodosMotoresAtuadores();
+        break;
+
+      // --- MODO MANUAL ---
+      case 'M':
+      case 'm':
+        Serial.println("CMD BIN: MODO MANUAL");
+        modoAtual = MANUAL;
+        pararTodosMotoresAtuadores();
+        break;
+
+      // --- VELOCIDADE ---
+      case 'V':
+      case 'v':
+        // Aqui usamos o int16_t 'valor' que veio no pacote
+        if (pacote.valor >= 0 && pacote.valor <= 255) {
+           V_VELOCIDADE_PWM = pacote.valor;
+           Serial.print("CMD BIN: Vel ajustada para ");
+           Serial.println(V_VELOCIDADE_PWM);
+        }
+        break;
+
+      default:
+        Serial.print("CMD BIN: Comando desconhecido: ");
+        Serial.println(pacote.tipo);
+        break;
+    }
+  }
+}
 
 // Função chamada IMEDIATAMENTE quando o pino da Rasp sobe (Rising)
 void IRAM_ATTR isrAnomalia() {
   anomaliaDetectada = true;
 }
-
 
 void moverRobo(int alvo) {
   velocidadeAlvo = alvo;
@@ -273,51 +368,7 @@ void setup() {
 void loop() {
   // --- 1. Leitura de Comandos via USB (Raspberry Pi) ---
   if (Serial.available() > 0) {
-    // Lê o caractere enviado (apenas 1 letra)
-    String comando = Serial.readStringUntil('\n');
-    comando.trim();  // Remove espaços e quebras
-
-    if (comando.length() == 0) return;
-
-    Serial.print(">>> USB CMD RECEBIDO: ");
-    Serial.println(comando);
-
-    if (comando == "e" || comando == "E") {
-      Serial.println(">>> USB: EMERGENCIA ATIVADA <<<");
-      emergency_stop = true;
-      analogWrite(ATUADOR_AVANCO, 255);
-      analogWrite(ATUADOR_RECUO, 0);
-      analogWrite(MOTOR_RECUO, 0);
-      analogWrite(MOTOR_AVANCO, 0);
-      delay(1000);
-      analogWrite(ATUADOR_AVANCO, 0);
-
-      estadoQueimaAtual = OCIOSO;  // Reseta a rotina
-    } else if (comando == "l" || comando == "L") {
-      Serial.println(">>> USB: SISTEMA LIBERADO <<<");
-      emergency_stop = false;
-      analogWrite(ATUADOR_AVANCO, 0);
-      analogWrite(ATUADOR_RECUO, 255);
-      analogWrite(MOTOR_RECUO, 0);
-      analogWrite(MOTOR_AVANCO, 0);
-      delay(1000);
-      analogWrite(ATUADOR_RECUO, 0);
-    } else if (comando == "a" || comando == "A") {
-      modoAtual = SEMI_AUTOMATICO;
-      pararTodosMotoresAtuadores();
-      Serial.println(">>> USB: MODO SEMI-AUTOMATICO <<<");
-    } else if (comando == "m" || comando == "M") {
-      modoAtual = MANUAL;
-      pararTodosMotoresAtuadores();
-      Serial.println(">>> USB: MODO MANUAL <<<");
-    } else if (comando.startsWith("v")) {
-      int nova_vel = comando.substring(1).toInt();
-      if (nova_vel >= 0 && nova_vel <= 255) {
-        V_VELOCIDADE_PWM = nova_vel;
-        Serial.print("VELOCIDADE: ");
-        Serial.println(V_VELOCIDADE_PWM);
-      }
-    }
+    lerSerialBinario();
   }
   // 1. Processa comandos de rádio (LoRa)
   if (lora_idle) {
@@ -360,6 +411,8 @@ void loop() {
     }
   }
 
+  // Atualiza os motores suavemente (não bloqueante)
+  atualizarRampaMotores();
   // 3. Lógica de Operação principal
   if (modoAtual == SEMI_AUTOMATICO) {
     // --- LÓGICA SEMI-AUTOMÁTICA (Controlada pela RPi) ---

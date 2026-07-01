@@ -94,11 +94,11 @@ def process_image_folder_dynamic(input_dir: str, output_dir: str, size: int, deb
 if __name__ == "__main__":
     # --- CONFIGURAÇÕES DE EXECUÇÃO ---
 
-    INPUT_FOLDER = "src/novo" 
+    INPUT_FOLDER = "src/novo/images_2026-02-13_16-57-41" 
     OUTPUT_FOLDER = "teste1" 
 
     FINAL_SIZE = 256
-    DEBUG_MODE = False # Mantenha como True para ver o plot da primeira imagem
+    DEBUG_MODE = True # Mantenha como True para ver o plot da primeira imagem
     
     # Certifique-se de ter `scipy` instalado: pip install scipy
 
