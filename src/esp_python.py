@@ -101,8 +101,7 @@ try:
                 nova_vel = int(cmd[1:])  # Pega número após 'v'
                 if 0 <= nova_vel <= 255:
                     velocidade_atual = nova_vel
-                    esp.write(f"v{nova_vel}\n".encode())
-                    #todo: enviar_pacote('V', velocidade_atual)
+                    enviar_pacote('V', velocidade_atual)
                     print(f"✅ Velocidade: {velocidade_atual}")
                 else:
                     print("❌ Velocidade 0-255")
@@ -110,15 +109,14 @@ try:
                 print("❌ Use: v50, v100...")
         elif cmd == '+':  # Aumenta 10
             velocidade_atual = min(255, velocidade_atual + 10)
-            #todo enviar_pacote('V', velocidade_atual)
+            enviar_pacote('V', velocidade_atual)
             print(f"Aumentando Velocidade: {velocidade_atual}")
         elif cmd == '-':  # Diminui 10
             velocidade_atual = max(0, velocidade_atual - 10)
-            #todo enviar_pacote('V', velocidade_atual)
+            enviar_pacote('V', velocidade_atual)
             print(f"Diminuindo Velocidade: {velocidade_atual}")
         elif cmd in ['e', 'l', 'a', 'm']:
-            esp.write((cmd + '\n').encode())
-            #todo: enviar_pacote(cmd, 0)
+            enviar_pacote(cmd, 0)
             print(f"Enviado: {cmd}")
         else:
             print("❌ Comando desconhecido.")

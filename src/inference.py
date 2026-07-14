@@ -10,30 +10,34 @@ from anomalib.deploy import OpenVINOInferencer
 ANOMALY_SCORE = 1.0
 
 def predict_image(model, image, transform, image_size):
-
+    """
+    Executa a inferência adaptando automaticamente a entrada e a saída 
+    dependendo se o modelo é OpenVINO ou PyTorch.
+    """
     if isinstance(model, OpenVINOInferencer):
-        # OpenVINO espera Numpy Array, mas sua entrada original é PIL
+        # --- LÓGICA OPENVINO ---
+        # OpenVINO espera Numpy Array (Cru). Se vier PIL, converte:
         image_numpy = np.array(image) if isinstance(image, Image.Image) else image
-        
-        # O OpenVINO faz o resize/normalize internamente usando metadata
+
+        # O OpenVINO faz o resize/normalize internamente usando o metadata.json
         predictions = model.predict(image=image_numpy)
         
-        # Extração dos resultados
-        pred_score = predictions.pred_score.item()
-        print(f"{pred_score=}")
+        # Extração do score (com proteção caso já seja um float nativo do Python)
+        score_val = predictions.pred_score
+        pred_score = score_val.item() if hasattr(score_val, 'item') else float(score_val)
+        
         
         # Mapa de Calor (Heat Map)
         if predictions.anomaly_map is not None:
             anomaly_map = np.squeeze(predictions.anomaly_map)
         else:
             anomaly_map = np.zeros((image_size, image_size), dtype=np.float32)
-        print(f'{anomaly_map.ndim=}')
+            
         # Máscara de Segmentação
         if predictions.pred_mask is not None:
             pred_mask = np.squeeze((predictions.pred_mask.astype(np.uint8) * 255))
         else:
             pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
-        print(f'{pred_mask.ndim=}')
 
     else:
         input_tensor = transform(image).unsqueeze(0) # Adiciona dimensão de batch
@@ -57,7 +61,7 @@ def predict_image(model, image, transform, image_size):
         except AttributeError:
             # Se o modelo NÃO retornar, crie uma máscara preta (array de zeros)
             pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
-        
+
     return image, anomaly_map, pred_score, pred_mask
 
 def apply_pred_mask_on_image(image, pred_mask, color=(0,0,255)):
@@ -100,7 +104,6 @@ def visualize_imgs(path_dir, model, img_class, image_size):
     transform = v2.Compose([
         v2.Resize((image_size, image_size)),
         v2.ToTensor(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
     if path_dir.exists() and path_dir.is_dir():
@@ -109,6 +112,7 @@ def visualize_imgs(path_dir, model, img_class, image_size):
             print(f"{Colors.YELLOW}Aviso: Nenhuma imagem .jpg encontrada em {path_dir}{Colors.RESET}")
         
         for i, img_path in enumerate(path_images):
+            start_time = time.time()
             print(f"\n{Colors.YELLOW}Processando imagem ({img_class}) {i+1}/{len(path_images)}: {img_path}{Colors.RESET}")
             image = Image.open(img_path).convert("RGB")
             original_img, anomaly_map, score, pred_mask = predict_image(model, image, transform, image_size) 
@@ -116,123 +120,39 @@ def visualize_imgs(path_dir, model, img_class, image_size):
             # --- Visualização com OpenCV ---
             # Converte a imagem original para o formato BGR para exibição com cv2
             original_img_cv2 = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
+
+            # 1. FIXA O TAMANHO PADRÃO (640x640 por imagem)
+            new_size = 640
+            original_img_cv2 = cv2.resize(original_img_cv2, (new_size, new_size))
+            anomaly_map_resized = cv2.resize(anomaly_map, (new_size, new_size))
             original_img_cv2 = apply_pred_mask_on_image(original_img_cv2, pred_mask, color=(0,0,255))
 
-            # Redimensiona o mapa de anomalia para o tamanho da imagem original
-            anomaly_map_resized = cv2.resize(anomaly_map, (original_img_cv2.shape[1], original_img_cv2.shape[0]))
-            print(2)
             # Normaliza o mapa de anomalia para o intervalo 0-255 e aplica um colormap
             anomaly_map_normalized = (anomaly_map_resized * 255).astype(np.uint8)
             anomaly_map_color = cv2.applyColorMap(anomaly_map_normalized, cv2.COLORMAP_JET)
-
+  
             # Concatena as duas imagens (original e mapa de anomalia) lado a lado
             combined_img = np.hstack([original_img_cv2, anomaly_map_color])
+            expected_status = f"{Colors.GREEN}Baixa (ex: < 0.5){Colors.RESET}"
+            print(f"[{time.time() - start_time:.2f} s] Pontuação de anomalia esperada ({img_class}): {expected_status}, Obtido: {Colors.GREEN}{score:.4f}{Colors.RESET}")   
             
+
+            # Adiciona o Score direto na tela
+            color_text = (0, 0, 255) if score > 0.5 else (0, 255, 0)
+            cv2.putText(combined_img, f"Score: {score:.4f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color_text, 2)
+
             # Exibe a imagem combinada
             window_name = f"Original ({img_class}) - Score: {score:.4f} | Anomaly Map"
             
             cv2.imshow(window_name, combined_img)
-
             print(f"{Colors.CYAN}Pressione qualquer tecla para a próxima imagem...{Colors.RESET}")
             cv2.waitKey(0) # Espera por uma tecla
 
             cv2.destroyAllWindows() # Fecha todas as janelas abertas
             
-            expected_status = f"{Colors.GREEN}Baixa (ex: < 0.5){Colors.RESET}"
-            print(f"Pontuação de anomalia esperada ({img_class}): {expected_status}, Obtido: {Colors.GREEN}{score:.4f}{Colors.RESET}")
-            
+
     else:
         print(f"{Colors.YELLOW}Aviso: Diretório de imagens normais não encontrado ou não é uma pasta: {path_dir}.{Colors.RESET}")
-
-def live_inference_opencv(model, image_size):
-    """
-    Realiza inferência em tempo real usando a câmera e exibe os resultados
-    usando OpenCV para visualização.
-
-    Args:
-        model (torch.nn.Module): O modelo Anomalib carregado para inferência.
-        image_size (int): O tamanho para redimensionar a imagem de entrada do modelo.
-        device (str): O dispositivo para onde enviar o modelo e os tensores ('cuda' ou 'cpu').
-    """
-    # 1. Configuração da Câmera
-    cap = cv2.VideoCapture(0)  # 0 geralmente se refere à câmera padrão do sistema
-    if not cap.isOpened():
-        print(f"{Colors.RED}Erro: Não foi possível abrir a câmera. Verifique se a câmera está conectada e disponível.{Colors.RESET}")
-        return
-
-    # 2. Pré-processamento: As mesmas transformações usadas no treinamento/inferência do dataset
-    transform_for_model = v2.Compose([
-        v2.Resize((image_size, image_size)),
-        v2.ToTensor(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-    model.eval() # Coloca o modelo em modo de avaliação
-    print(f"{Colors.GREEN}Iniciando inferência em tempo real com OpenCV. Pressione 'q' para sair.{Colors.RESET}")
-
-    try:
-        while True:
-            ret, frame = cap.read() # Lê um frame da câmera (BGR)
-            if not ret:
-                print(f"{Colors.RED}Erro: Não foi possível ler o frame da câmera. Saindo...{Colors.RESET}")
-                break
-
-            # Converter o frame OpenCV (BGR) para PIL RGB para o modelo
-            frame_rgb_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-            # Clona o frame original para exibir ao lado do mapa de anomalia
-            original_frame_display = frame.copy() 
-
-            start_time=time.time()
-            original_img, anomaly_map, pred_score, pred_mask = predict_image(model, frame_rgb_pil, transform_for_model, image_size)
-            print(f"Tempo: {time.time()-start_time:.4f}, {pred_score:4f} / Score: {check_for_anomaly_by_score(pred_score, 0.5)} / Area: {check_for_anomaly_by_area(pred_mask, 100, 0.5)}")
-
-            original_frame_display = apply_pred_mask_on_image(original_frame_display, pred_mask, color=(0,0,255))
-
-            # Pós-processamento para visualização com OpenCV:
-            # Redimensiona o mapa de anomalia para o tamanho do frame original
-            # Normaliza o mapa de 0-1 para 0-255 (necessário para cv2.applyColorMap)
-            anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
-            anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
-                                             (frame.shape[1], frame.shape[0]), # (largura, altura)
-                                             interpolation=cv2.INTER_LINEAR)
-            
-            # Aplica um mapa de cores (heatmap) para melhor visualização
-            anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
-
-            # Adiciona o score na imagem original para display
-            cv2.putText(original_frame_display, 
-                        f"Score: {pred_score:.4f}", 
-                        (10, 30), # Posição do texto
-                        cv2.FONT_HERSHEY_SIMPLEX, 
-                        1,        # Tamanho da fonte
-                        (0, 255, 0), # Cor verde (BGR)
-                        2)        # Espessura da linha
-
-            # Concatena as imagens horizontalmente para exibir lado a lado
-            # Certifique-se de que ambas as imagens tenham a mesma altura antes de concatenar
-            # if anomaly_map_colored.shape[0] != original_frame_display.shape[0]:
-            #     # Isso não deve acontecer se redimensionamos corretamente, mas é uma verificação de segurança
-            #     min_height = min(anomaly_map_colored.shape[0], original_frame_display.shape[0])
-            #     original_frame_display = cv2.resize(original_frame_display, (original_frame_display.shape[1], min_height))
-            #     anomaly_map_colored = cv2.resize(anomaly_map_colored, (anomaly_map_colored.shape[1], min_height))
-
-            combined_frame = np.hstack((original_frame_display, anomaly_map_colored))
-
-            # 4. Visualização
-            cv2.imshow("Inferência em Tempo Real (Original | Mapa de Anomalia)", combined_frame)
-
-            # Saída ao pressionar 'q'
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print(f"{Colors.YELLOW}Saindo da inferência em tempo real.{Colors.RESET}")
-                break
-
-    except Exception as e:
-        print(f"{Colors.RED}Ocorreu um erro durante a inferência em tempo real: {e}{Colors.RESET}")
-
-    finally:
-        cap.release() # Libera a câmera
-        cv2.destroyAllWindows() # Fecha todas as janelas do OpenCV
 
 def live_inference_rasp(model, config, camera):
     """
@@ -259,7 +179,6 @@ def live_inference_rasp(model, config, camera):
     transform_for_model = v2.Compose([
         v2.Resize((image_size, image_size)),
         v2.ToTensor(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
     model.eval() # Coloca o modelo em modo de avaliação
@@ -369,12 +288,6 @@ def live_inference_rasp(model, config, camera):
 def serve_inference_to_pi(model, config, sock, threshold=0.9):
     """
     Recebe um stream de imagens via TCP, executa inferência e envia uma flag de anomalia.
-
-    Args:
-        model (torch.nn.Module): O modelo Anomalib carregado para inferência.
-        pc_ip (str): IP do PC (geralmente '0.0.0.0' para escutar todas as interfaces).
-        pc_port (int): A porta TCP para escutar.
-        image_size (int): O tamanho da imagem para inferência.
     """
     import struct
     import socket
@@ -391,7 +304,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
     image_size = config["image_size"]
 
-    # CONFIGURAÇÃO DA THREAD
+    # CONFIGURAÇÃO DA THREAD para o salvamento das imagens não atrasar a execução 
     # Cria a fila. 'maxsize=0' significa tamanho infinito (cuidado com memória RAM)
     image_save_queue = queue.Queue(maxsize=50)
 
@@ -437,7 +350,6 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
     transform_for_model = v2.Compose([
         v2.Resize((image_size, image_size)),
         v2.ToTensor(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
     if hasattr(model, 'eval'): model.eval() # Coloca o modelo em modo de avaliação
@@ -454,7 +366,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             sock.sendall(command.encode('utf-8'))
             
             sock.settimeout(None) # Timeout para a resposta ACK
-            response = sock.recv(3).decode().strip()
+            response = sock.recv(4).decode().strip()
             
             if response == "ACK":
                 print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
@@ -489,21 +401,6 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                 image_data += packet
             
             if not image_data: break
-
-# --- RAIO-X DOS BYTES (COLOQUE ISSO AQUI) ---
-            print(f"-> Esperado: {message_size} bytes | Recebido: {len(image_data)} bytes")
-            if len(image_data) >= 4:
-                # Todo JPEG no planeta TEM que começar com \xff\xd8
-                print(f"-> Assinatura do Arquivo (Primeiros 4 bytes): {image_data[:4]}")
-            
-            # Trava de segurança: Se não recebeu tudo, aborta esse frame!
-            if len(image_data) < message_size:
-                print(f"[{Colors.YELLOW}REDE{Colors.RESET}] Pacote incompleto. Ignorando frame.")
-                sock.sendall(b'N') 
-                continue
-            # -------------------------------------------
-            
-            print(message_size)
             
             # Transforma os bytes crus da rede diretamente em um array numpy
             np_arr = np.frombuffer(image_data, dtype=np.uint8)
@@ -542,13 +439,15 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
             # Envio imediato da resposta
             sock.sendall(response)
+            t2 = time.time() - start_time
 
             # Pós-processamento para visualização com OpenCV:
             anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
             anomaly_map_resized = cv2.resize(anomaly_map_normalized, 
                                             (decoded_image.shape[1], decoded_image.shape[0]),
                                             interpolation=cv2.INTER_LINEAR)
-    
+
+
             # Aplica um mapa de cores (heatmap) para melhor visualização
             anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
 
@@ -563,10 +462,6 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                 print(f"Imagens enviadas para fila (Frame {inference_count})")
             except queue.Full:
                 print("Aviso: Fila de salvamento cheia, pulando este frame.")
-            
-            #cv2.imwrite(fname_original, decoded_image)
-            #cv2.imwrite(fname_map, anomaly_map_colored)
-            #print(f"Imagens salvas para o frame {inference_count} com score {pred_score:.4f}.")
 
             inference_count += 1
 
@@ -604,7 +499,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                     decision_buffer = 'N'
 
             is_anomaly = response in [b'P', b'A']
-            print(f"[{time.time() - start_time:.2f} s]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
+            print(f"[{time.time() - start_time:.2f}s (Resposta:{t2:.2f}s)]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
 
     except socket.timeout:
         print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")

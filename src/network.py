@@ -30,7 +30,6 @@ def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 70):
     _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     
     # 2. Converte o array numpy diretamente para bytes (Zero Copy overhead)
-    # Antes você fazia pickle.dumps(encoded_image), que é lento.
     data = encoded_image.tobytes()
     
     # 3. Prepara o cabeçalho de tamanho (4 bytes, unsigned int)
@@ -70,7 +69,7 @@ def pi_connect(pi_ip, pi_port):
                 print(f"[{Colors.GREEN}Rede-PC{Colors.RESET}] Conexão principal estabelecida.")
                 return sock # Sucesso, sai do loop de retry
             except (ConnectionRefusedError, socket.timeout, socket.gaierror) as e:
-                print(f"[{Colors.RED}Rede-PC{Colors.RESET}] Falha ao conectar ({e}). A Pi está escutando? Tentando novamente em 5s...")
+                print(f"[{Colors.RED}Rede-PC{Colors.RESET}] Falha ao conectar ({e}). A Pi está escutando? Tentando novamente em 3s...")
                 time.sleep(3)
 
 # Função para receber todas as imagens e salvar
@@ -86,7 +85,6 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
     save_path.mkdir(parents=True, exist_ok=True)
     
     # --- ETAPA 1: Sincronização (Lógica da antiga 'send_command_and_wait_ack') ---
-    
     if not sock:
         print(f"[{Colors.RED}Erro{Colors.RESET}] Conexão de rede não estabelecida. Abortando coleta.")
         return
@@ -99,7 +97,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             sock.sendall(command.encode('utf-8'))
             
             sock.settimeout(10.0) # Timeout para a resposta ACK
-            response = sock.recv(16).decode().strip()
+            response = sock.recv(4).decode().strip()
             
             if response == "ACK":
                 print(f"[{Colors.GREEN}SYNC{Colors.RESET}] Confirmação (ACK) recebida. Comando '{command}' concluído.")
@@ -130,16 +128,24 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
                 break
             message_size = struct.unpack("!I", message_size_data)[0]
 
-            # Recebe os dados
+            # Recebe os dados brutos da imagem
             data = b''
-            while len(data) < message_size:
-                packet = sock.recv(message_size - len(data))
-                if not packet: break
-                data += packet
+            sock.settimeout(2.0) # Evita travamento eterno se a rede piscar
+            try:
+                while len(data) < message_size:
+                    packet = sock.recv(message_size - len(data))
+                    if not packet: break
+                    data += packet
+            except socket.timeout:
+                print(f"[{Colors.YELLOW}REDE{Colors.RESET}] Timeout. Pacote perdido, pulando...")
+                sock.settimeout(None)
+                continue
+                
+            sock.settimeout(None) # Volta ao normal
             
             # Decodifica e salva a imagem
-            encoded_image = pickle.loads(data)
-            decoded_image = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+            np_arr = np.frombuffer(data, dtype=np.uint8)
+            decoded_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
             if decoded_image is None: continue
             

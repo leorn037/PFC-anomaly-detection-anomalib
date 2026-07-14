@@ -38,7 +38,7 @@ class CaboTracker:
         h, w, _ = frame_bgr.shape
         
         # 2. FUNÇÃO CENTRALIZAR
-        final_frame, left, right = self._centralizar_cabo(frame_bgr, self.crop_output_size, debug=True)
+        final_frame, left, right = self._centralizar_cabo(frame_bgr, self.crop_output_size, debug=debug_show_steps)
 
         if debug_show_steps:
             self._debug_visualization(frame_bgr,left, right)
@@ -73,7 +73,6 @@ class CaboTracker:
         else:
             self.last_center_x = w_roi // 2
             
-        #!self.gray = self._aplicar_clahe(self.gray)
         # APLICA BLUR APENAS VERTICAL: 
         self.gray = self._linearizar_trancado(self.gray)
         # 1. CANNY (robusto a borrão)
@@ -214,14 +213,6 @@ class CaboTracker:
             canvas[y_off:y_off+new_h, x_off:x_off+new_w] = resized
 
         return canvas, left, right
-
-    def _aplicar_clahe(self, imagem_gray):
-        # clipLimit: quanto de contraste adicionar (2.0 a 4.0 é bom)
-        # tileGridSize: tamanho da janela local (8x8 é padrão)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        
-        gray_melhorado = clahe.apply(imagem_gray)
-        return gray_melhorado
 
     def _linearizar_trancado(self, imagem_gray):
         # Kernel (1, 51) significa: 1px de largura, 51px de altura.

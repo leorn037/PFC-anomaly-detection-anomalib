@@ -45,7 +45,7 @@ except Exception as e:
 
 def setup_network_server(config):
     """Configura servidor de rede se necessário."""
-    if not (config["network_inference"] or config["receive_model"] or config["visual_rasp"]):
+    if not (config["network_inference"] or config["receive_model"] or config["live"]):
         return None, None
     return pi_socket(config["pi_port"])
 
@@ -70,10 +70,11 @@ def receive_model(config, port):
     """Recebe modelo do PC e atualiza configuração."""
     if not config["receive_model"]:
         print(f"{Colors.YELLOW}Recebimento de Modelo Desabilitado.{Colors.RESET}")
-        return 
+        return None
     
     start_time = time.time()
-    from models import MODEL_CONFIGS, create_model
+    from models import MODEL_CONFIGS
+    #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
     dict_model = receive_model_from_pc(port, config["model_output_dir"])
     receive_time = time.time() - start_time
     
@@ -85,17 +86,8 @@ def receive_model(config, port):
     
     print(f"{Colors.BLUE}Modelo recebido em {receive_time:.2f}s.{Colors.RESET}")
 
-def create_local_model(config):
-    """Cria modelo local se não usa inferência em rede."""
-    if config["network_inference"]:
-        return None
-    
-    from models import MODEL_CONFIGS, create_model
-    model = create_model(config)
-    if model is None:
-        print(f"{Colors.RED}Falha ao criar modelo.{Colors.RESET}")
-        return None
-    return model
+    #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
+    # return model
 
 def run_inference(camera, conn, config, model):
     """Executa inferência baseada no modo."""
@@ -106,10 +98,12 @@ def run_inference(camera, conn, config, model):
             ret = live_inference_rasp_to_pc(
                 camera, conn, config["image_size"], anomaly_output, move_output
             )
-            return ret == "DISCONNECTED" #!
+            return ret == "DISCONNECTED"
         else:
             if model is None: 
                 print(f"{Colors.RED}Modelo necessário para visualização offline.{Colors.RESET}")
+            
+            #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
             live_inference_rasp(model, config, camera, anomaly_output)
     else:
         # Visualização offline
@@ -141,12 +135,9 @@ def main(camera):
             return True  # Se desconectar durante a funçãomanda reiniciar a main
         
         # 3. Recebimento de modelo
-        receive_model(config, config["pi_port"])
-        
-        # 4. Criação de modelo local
-        model = create_local_model(config)
-        if model is None and not config["network_inference"]: # Se mandou a rasp criar modelo e não criou manda reiniciar main
-            return True 
+        #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
+        # Talvez não seja neessário retornar model
+        model = receive_model(config, config["pi_port"])
         
         # 5. Inferência/Visualização
         if run_inference(camera, conn, config, model):

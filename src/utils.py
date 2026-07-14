@@ -32,8 +32,8 @@ CONFIG = {
     "image_size": 256, # Defina o tamanho da imagem para coleta e redimensionamento
     "batch_size": 32,
     "folder_name": 'Cabo',
-    "normal_dir": "novo/images_2026-02-13_16-57-41", # data/normal # Imagens normais para treinamento
-    "abnormal_test_dir": "data/abnormal", # Imagens anômalas para teste
+    "normal_dir": "train", # data/normal # Imagens normais para treinamento
+    "abnormal_test_dir": "eval", # Imagens anômalas para teste
     "normal_test_dir": "data/test", # Imagens normais para teste
 
 
@@ -42,14 +42,13 @@ CONFIG = {
     "model_name": 'PatchCore',
     "ckpt_path": None,
     "evaluate": False,
-    "use_openvino": True,
+    "use_openvino": False,
 
-    "operation_mode" : 'Train', # Operação com modelo ('Inference','Train')
+    "operation_mode" : 0, # Operação com modelo (0 = Treinamento, 1 = Inferência)
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
 
     # Visualização
-    "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas
-    "visual_rasp" : False, # Envio de imagens via websocket da Raspberry para o PC
+    "live" : False, # Inferência em tempo real, False: Inferência em imagens salvas
 }
 
 import argparse
@@ -84,8 +83,9 @@ def anomaly_args(config, mode="rasp"):
         ("collect", bool, "Habilita a coleta de imagens (True/False)"),
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("model_name", str, "Nome do modelo para ser treinado"),
-        ("operation_mode", str, "Escolhe o modo de operação da detecção ('Train', 'Inference')"),
+        ("operation_mode", int, "Escolhe o modo de operação da detecção ('Train', 'Inference')"),
         ("network_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
+        ("use_openvino", bool, "Habilita ou desabilita o OpenVINO (True/False)"),
     ]
 
     rasp_args = [
@@ -139,6 +139,12 @@ def print_config_summary(config: dict, mode: str = "rasp"):
                                        Se None, exibe um conjunto padrão de chaves.
     """
     
+    # 1. Defina o mapeamento de modos
+    mode_map = {
+        0: "Treinamento",
+        1: "Inferência"
+    }
+
     # 1. Defina um conjunto padrão de chaves se nenhuma for fornecida
     if mode == "rasp":
         keys_to_show = [
@@ -146,7 +152,7 @@ def print_config_summary(config: dict, mode: str = "rasp"):
             "receive_model", "network_inference", "visual_rasp"
             ]
     else: 
-        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "network_inference" ]
+        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "network_inference", "use_openvino" ]
 
     # 2. Crie uma string de separação para o cabeçalho
     separator = f"{Colors.CYAN}{'-'*40}{Colors.RESET}"
@@ -158,9 +164,15 @@ def print_config_summary(config: dict, mode: str = "rasp"):
     # 3. Itere sobre as chaves e imprima os valores
     for key in keys_to_show:
         value = config.get(key, f"{Colors.RED}N/A{Colors.RESET}")
-        
-        # 4. Aplique formatação especial para booleanos
-        if isinstance(value, bool):
+
+        if key == "operation_mode":
+            # Se estiver no mapa, mostra o nome, senão mostra apenas o número
+            label = mode_map.get(value, "")
+            display_val = f"{value} ({label})" if label else f"{value}"
+            value_str = f"{Colors.YELLOW}{display_val}{Colors.RESET}"
+
+        # Lógica para booleanos (mantida igual)
+        elif isinstance(value, bool):
             if value:
                 value_str = f"{Colors.GREEN}{value}{Colors.RESET}"
             else:

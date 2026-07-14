@@ -49,19 +49,7 @@ try:
 
 except ImportError:
     # --- Bloco executado se as bibliotecas da Raspberry Pi não existirem ---
-    print("Usando a câmera do PC com OpenCV.")
-    
-    # Use as suas funções originais para a câmera do PC
-    def setup_camera(image_size):
-        return cv2.VideoCapture(0)
-
-    def get_frame(camera,image_size):
-        ret, frame = camera.read()
-        if not ret:
-            print(f"{Colors.RED}Erro: Não foi possível ler o frame. A câmera pode ter sido desconectada ou ter um problema. Saindo da coleta.{Colors.RESET}")
-            return None
-        frame=cv2.resize(frame, (image_size, image_size))
-        return frame
+    print("Erro da câmera.")
 
 def has_gui():
     """Verifica se há uma interface gráfica disponível."""

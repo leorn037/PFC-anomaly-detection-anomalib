@@ -52,6 +52,8 @@ bool emergency_stop = false;
 #define VELOCIDADE_INSPECAO 75  // Valor de PWM (0-255)
 #define TEMPO_MOVER_MACARICO 2000
 
+#define COMPENSACAO_ATRASO_MS 500 // Tempo em ms para o robô recuar e alinhar o maçarico
+
 enum ModoOperacao {
   MANUAL,
   SEMI_AUTOMATICO
@@ -330,6 +332,8 @@ void gerenciarRotinaDeQueima() {
   }
 }
 
+void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
+
 void setup() {
   Serial.begin(115200);
   Serial.setTimeout(10);
@@ -480,13 +484,14 @@ void loop() {
             // Agora sim, pode printar sem travar
             Serial.print("Movendo (Inspeção): ");
             Serial.println(V_VELOCIDADE_PWM);
+          }
         }
       }
     }
-  }
   // else (modoAtual == MANUAL)
   // Em modo manual, nenhuma ação é necessária no loop.
   // A função OnRxDone() trata os comandos de PWM diretamente.
+  }
 }
 
 void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {

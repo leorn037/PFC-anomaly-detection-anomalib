@@ -4,7 +4,7 @@ from utils import Colors, CONFIG as config, anomaly_args, print_config_summary
 def connect_to_pi(config):
     """Estabelece conexão resiliente com a Raspberry Pi."""
     # Tenta se conectar à Pi (Servidor) com resiliência
-    if not (config["network_inference"] or config["receive_model"] or config["visual_rasp"]):
+    if not (config["network_inference"] or config["receive_model"] or config["live"]):
         return None
     return pi_connect(config["pi_ip"], config["pi_port"])
 
@@ -29,7 +29,7 @@ def setup_pipeline(config, dataset_root):
 
 def train_and_evaluate(config, model, datamodule):
     """Executa treinamento e avaliação se configurado."""
-    if config["operation_mode"] == 'Train':
+    if config["operation_mode"] == 0:
         print(f"{Colors.BLUE}Iniciando treinamento...{Colors.RESET}")
         engine, training_time = train_model(model, datamodule, config)
         print(f"{Colors.BLUE}Treinamento concluído em {training_time:.2f}s.{Colors.RESET}")
@@ -80,6 +80,7 @@ def send_trained_model(config):
     model_path = get_latest_checkpoint(results_path)
     
     if model_path and config["receive_model"] and config["live"]:
+        #TODO: Usar modelo openvino para inferencia na rasp
         send_model_to_pi(model_path, config, MODEL_CONFIGS)
 
 def run_inference(config, model, sock):
@@ -87,22 +88,26 @@ def run_inference(config, model, sock):
     print(f"{Colors.BLUE}Verificando detecção de anomalias...{Colors.RESET}")
     
     if config["live"]:
+        # Inferência no PC via rede
         if config["network_inference"]:
             serve_inference_to_pi(model, config, sock, threshold=0.9)
-        elif config["visual_rasp"]:
-            receive_and_process_data()
+        # Inferencia na rasp com vizualização no pc
         else:
-            live_inference_opencv(model, config["image_size"])
+            # Envio de imagens via websocket da Raspberry para o PC
+            receive_and_process_data()
     else:
         # Teste offline
-        normal_dir = Path(config["normal_dir"])
-        img_class="Test"
-        visualize_imgs(normal_dir, model, img_class, config["image_size"])
-
+        
         # --- Processar imagens anômalas ---
         abnormal_dir = Path(config["abnormal_test_dir"])
         img_class = "Abnormal"
         visualize_imgs(abnormal_dir, model, img_class, config["image_size"])
+                
+        normal_dir = Path(config["normal_dir"])
+        img_class="Normal"
+        visualize_imgs(normal_dir, model, img_class, config["image_size"])
+
+
 
         plt.close('all') 
 
@@ -126,6 +131,7 @@ def main():
         model = train_and_evaluate(config, model, datamodule)
         
         # 5. Envio do modelo para Raspberry se configurado
+        #TODO: Usar modelo openvino para inferencia na rasp
         send_trained_model(config)
         
         # 6. Inferência/Visualização
@@ -156,7 +162,7 @@ if __name__ == "__main__":
     import time
     init_time = time.time()
     from models import MODEL_CONFIGS, setup_datamodule, create_model, train_model, evaluate_model, get_latest_checkpoint
-    from inference import live_inference_opencv, visualize_imgs, serve_inference_to_pi
+    from inference import visualize_imgs, serve_inference_to_pi
     from network import receive_all_images_and_save, send_model_to_pi, pi_connect, receive_and_process_data
 
 

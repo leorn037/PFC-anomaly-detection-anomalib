@@ -15,7 +15,7 @@ MODEL_CONFIGS = {
     "PatchCore": {
         "class": Patchcore,
         "params": {
-            "backbone": "wide_resnet50_2", # "resnet18" "wide_resnet50_2"
+            "backbone": "resnet50", # "resnet18" "wide_resnet50_2"
             "layers": ("layer2", "layer3"), # "layer3", "layer4"
             "coreset_sampling_ratio": 0.1,
             "num_neighbors": 9
@@ -79,11 +79,6 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
     from anomalib.data.utils import TestSplitMode, ValSplitMode
     image_size = config["image_size"] # Defina o tamanho da imagem para redimensionamento
 
-    transform= v2.Compose([
-        v2.Resize((image_size, image_size)),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
     datamodule = Folder(
         name=config["folder_name"],
         root=None,
@@ -94,7 +89,6 @@ def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração
         #normal_test_dir=config["normal_test_dir"], # Imagens normais para teste
         num_workers=4,
         train_batch_size=config["batch_size"],
-        augmentations=transform
     )
 
     datamodule.setup() # Carrega os datasets
@@ -107,7 +101,6 @@ def create_model(config):
     Funciona para treinamento e inferência.
     """
     from anomalib.pre_processing import PreProcessor
-    import torch
 
     model_name = config.get("model_name")
     ckp_path = config.get("ckpt_path")
@@ -120,7 +113,7 @@ def create_model(config):
         v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     pre_processor = PreProcessor(transform=transform)
-    
+
     # 1. Busca a configuração do modelo no dicionário
     model_info = MODEL_CONFIGS.get(model_name)
     if not model_info:
@@ -131,7 +124,7 @@ def create_model(config):
     model_params = model_info["params"]
     
     # 2. Lógica para Treinamento ou Inferência (unificada)
-    if mode != 'Inference':
+    if mode != 1:
         # Cria um novo modelo para treinamento
         model = ModelClass(pre_processor=pre_processor, **model_params)
         print(f"{Colors.GREEN}Modelo de treinamento '{model_name}' criado com sucesso.{Colors.RESET}")
@@ -201,8 +194,7 @@ def train_model(model, datamodule, config): # Encapsula a lógica de treinamento
     engine = Engine(logger=False,accelerator="auto", max_epochs=50)
     #trainer = Trainer(devices=4, accelerator="gpu", strategy="ddp")
 
-    if config["operation_mode"] == "New": ckpt_path = None
-    elif config["operation_mode"] == "Continue": ckpt_path = config["ckpt_path"]
+    if config["operation_mode"] == 2: ckpt_path = config["ckpt_path"]
     else: ckpt_path=None
     
     engine.fit(model=model,
@@ -228,10 +220,16 @@ def evaluate_model(engine, model, datamodule):
 
 def get_latest_checkpoint(results_path: Path) -> Path:
     """Função auxiliar para encontrar o último checkpoint salvo."""
+    import re
     if not results_path.exists(): return None
     
     version_dirs = sorted([d for d in results_path.iterdir() if d.is_dir() and d.name.startswith("v")])
     if not version_dirs: return None
+
+    # 2. Ordena usando uma função lambda como chave
+    # O re.findall extrai todos os dígitos da string do nome do diretório
+    # O int() converte esses dígitos para número real (ex: "v10" -> 10)
+    version_dirs.sort(key=lambda d: int(re.findall(r'\d+', d.name)[0]) if re.findall(r'\d+', d.name) else 0)
     
     latest_version = version_dirs[-1]
     checkpoint_path = latest_version / "weights" / "lightning"
@@ -242,3 +240,9 @@ def get_latest_checkpoint(results_path: Path) -> Path:
             return sorted(ckpt_files)[-1]
     return None
 
+    
+    # 2. Ordena usando uma função lambda como chave
+    # O re.findall extrai todos os dígitos da string do nome do diretório
+    # O int() converte esses dígitos para número real (ex: "v10" -> 10)
+    version_dirs.sort(key=lambda d: int(re.findall(r'\d+', d.name)[0]) if re.findall(r'\d+', d.name) else 0)
+    
