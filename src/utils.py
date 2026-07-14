@@ -48,7 +48,7 @@ CONFIG = {
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
 
     # Visualização
-    "live" : False, # Inferência em tempo real, False: Inferência em imagens salvas
+    "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas
 }
 
 import argparse
@@ -84,6 +84,7 @@ def anomaly_args(config, mode="rasp"):
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("model_name", str, "Nome do modelo para ser treinado"),
         ("operation_mode", int, "Escolhe o modo de operação da detecção ('Train', 'Inference')"),
+        ("live", bool, "Habilita a inferência das imagens em tempo real"),
         ("network_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
         ("use_openvino", bool, "Habilita ou desabilita o OpenVINO (True/False)"),
     ]
@@ -93,6 +94,7 @@ def anomaly_args(config, mode="rasp"):
         ("time_sample", float, "Intervalo entre capturas automáticas de imagens"),
         ("img_n", int, "Número de imagens a ser capturadas"),
         ("receive_model", bool, "Habilita a recepção do modelo via rede (True/False)"),
+        ("live", bool, "Habilita a inferência das imagens em tempo real"),
         ("network_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
     ]
 
