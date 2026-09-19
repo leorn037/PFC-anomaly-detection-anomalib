@@ -6,6 +6,7 @@ import time
 from utils import Colors
 import cv2
 from anomalib.deploy import OpenVINOInferencer
+from openvino.runtime import CompiledModel
 
 ANOMALY_SCORE = 1.0
 
@@ -32,13 +33,12 @@ def predict_image(model, image, transform, image_size):
             anomaly_map = np.squeeze(predictions.anomaly_map)
         else:
             anomaly_map = np.zeros((image_size, image_size), dtype=np.float32)
-            
+
         # Máscara de Segmentação
         if predictions.pred_mask is not None:
             pred_mask = np.squeeze((predictions.pred_mask.astype(np.uint8) * 255))
         else:
             pred_mask = np.zeros((image_size, image_size), dtype=np.uint8)
-
     else:
         input_tensor = transform(image).unsqueeze(0) # Adiciona dimensão de batch
         with torch.no_grad():
@@ -80,79 +80,12 @@ def apply_pred_mask_on_image(image, pred_mask, color=(0,0,255)):
 
     # Redimensione a máscara para o tamanho da imagem
     pred_mask_resized = cv2.resize(pred_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
-    mask_bool = pred_mask_resized > 255
 
     # Se quiser borda, desenhe contorno em volta de regiões anômalas:
     contours, _ = cv2.findContours(pred_mask_resized, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(img, contours, -1, color, 1)
 
     return img
-
-def visualize_imgs(path_dir, model, img_class, image_size):
-    """
-    Processa e visualiza imagens de anomalia usando OpenCV.
-    
-    Args:
-        path_dir (Path): Caminho do diretório contendo as imagens.
-        model: O modelo de detecção de anomalias.
-        img_class (str): O nome da classe de imagem (ex: "normal", "anomalia").
-        image_size (int): O tamanho da imagem para redimensionamento.
-    """
-    if hasattr(model, 'eval'): model.eval() # Coloca o modelo em modo de avaliação
-
-    # Certifique-se de que as transformações correspondem às usadas no datamodule
-    transform = v2.Compose([
-        v2.Resize((image_size, image_size)),
-        v2.ToTensor(),
-    ])
-
-    if path_dir.exists() and path_dir.is_dir():
-        path_images = sorted(list(path_dir.glob("*.jpg")))
-        if not path_images:
-            print(f"{Colors.YELLOW}Aviso: Nenhuma imagem .jpg encontrada em {path_dir}{Colors.RESET}")
-        
-        for i, img_path in enumerate(path_images):
-            start_time = time.time()
-            print(f"\n{Colors.YELLOW}Processando imagem ({img_class}) {i+1}/{len(path_images)}: {img_path}{Colors.RESET}")
-            image = Image.open(img_path).convert("RGB")
-            original_img, anomaly_map, score, pred_mask = predict_image(model, image, transform, image_size) 
-
-            # --- Visualização com OpenCV ---
-            # Converte a imagem original para o formato BGR para exibição com cv2
-            original_img_cv2 = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
-
-            # 1. FIXA O TAMANHO PADRÃO (640x640 por imagem)
-            new_size = 640
-            original_img_cv2 = cv2.resize(original_img_cv2, (new_size, new_size))
-            anomaly_map_resized = cv2.resize(anomaly_map, (new_size, new_size))
-            original_img_cv2 = apply_pred_mask_on_image(original_img_cv2, pred_mask, color=(0,0,255))
-
-            # Normaliza o mapa de anomalia para o intervalo 0-255 e aplica um colormap
-            anomaly_map_normalized = (anomaly_map_resized * 255).astype(np.uint8)
-            anomaly_map_color = cv2.applyColorMap(anomaly_map_normalized, cv2.COLORMAP_JET)
-  
-            # Concatena as duas imagens (original e mapa de anomalia) lado a lado
-            combined_img = np.hstack([original_img_cv2, anomaly_map_color])
-            expected_status = f"{Colors.GREEN}Baixa (ex: < 0.5){Colors.RESET}"
-            print(f"[{time.time() - start_time:.2f} s] Pontuação de anomalia esperada ({img_class}): {expected_status}, Obtido: {Colors.GREEN}{score:.4f}{Colors.RESET}")   
-            
-
-            # Adiciona o Score direto na tela
-            color_text = (0, 0, 255) if score > 0.5 else (0, 255, 0)
-            cv2.putText(combined_img, f"Score: {score:.4f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color_text, 2)
-
-            # Exibe a imagem combinada
-            window_name = f"Original ({img_class}) - Score: {score:.4f} | Anomaly Map"
-            
-            cv2.imshow(window_name, combined_img)
-            print(f"{Colors.CYAN}Pressione qualquer tecla para a próxima imagem...{Colors.RESET}")
-            cv2.waitKey(0) # Espera por uma tecla
-
-            cv2.destroyAllWindows() # Fecha todas as janelas abertas
-            
-
-    else:
-        print(f"{Colors.YELLOW}Aviso: Diretório de imagens normais não encontrado ou não é uma pasta: {path_dir}.{Colors.RESET}")
 
 def live_inference_rasp(model, config, camera):
     """
@@ -346,6 +279,17 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
     os.makedirs(inference_dir, exist_ok=True)
     print(f"[{Colors.GREEN}Diretório de Salvamento{Colors.RESET}] Criando pasta para resultados de inferência: {inference_dir}")
 
+    # 3. Cria o diretório (se ele não existir)
+    os.makedirs(inference_dir, exist_ok=True)
+    print(f"[{Colors.GREEN}Diretório de Salvamento{Colors.RESET}] Criando pasta para resultados de inferência: {inference_dir}")
+
+    # NOVO: Inicializa o Log CSV
+    log_csv_path = inference_dir / "metricas_deteccao.csv"
+    import csv
+    with open(log_csv_path, mode='w', newline='') as csv_file:
+        writer = csv.writer(csv_file, delimiter=';')
+        writer.writerow(['Frame', 'Timestamp', 'Score', 'Tempo_Inferencia_s', 'Decisao'])
+
     # Pré-processamento: as mesmas transformações usadas no treinamento
     transform_for_model = v2.Compose([
         v2.Resize((image_size, image_size)),
@@ -378,8 +322,9 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
         except (ConnectionRefusedError, socket.timeout) as e:
             print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Falha na conexão ao sincronizar 'M': {e}")
         except Exception as e:
-            print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Erro inesperado: {e}")
-            return
+            print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
+            import traceback; traceback.print_exc()   
+            raise e
         
     # Loop principal de inferência
     decision_buffer = None
@@ -415,7 +360,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             is_anomaly = check_for_anomaly_by_score(pred_score, threshold)
             # is_anomaly = check_for_anomaly_by_area(pred_mask, 100, threshold)
 
-            # !LÓGICA DE DECISÃO E RESPOSTA
+            # LÓGICA DE DECISÃO E RESPOSTA
             response = b'N'
             # CASO 1: O humano apertou algo no frame anterior?
             if decision_buffer == 'A':
@@ -451,11 +396,16 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
             # Aplica um mapa de cores (heatmap) para melhor visualização
             anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
 
-            # Salva as imagens
             timestamp = int(time.time() * 1000)
+
+            # Salva os dados no CSV a cada frame
+            with open(log_csv_path, mode='a', newline='') as csv_file:
+                writer = csv.writer(csv_file, delimiter=';')
+                writer.writerow([inference_count, timestamp, round(pred_score, 4), round(t2, 4), response.decode()])
+            # Salva as imagens
             fname_original = str(inference_dir / f"{inference_count:04d}_{timestamp}_original.jpg")
             fname_map = str(inference_dir / f"{inference_count:04d}_{timestamp}_anomaly_map_{pred_score:.4f}.jpg")
-                                  
+                      
             try:
                 image_save_queue.put((fname_original, decoded_image.copy()), block=False)
                 image_save_queue.put((fname_map, anomaly_map_colored.copy()), block=False)
@@ -465,8 +415,12 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
 
             inference_count += 1
 
-            decoded_image = apply_pred_mask_on_image(decoded_image, pred_mask, color=(0,0,255))
+            # CRIANDO A MÁSCARA PERFEITA: 
+            # Tudo que no mapa de calor for maior ou igual ao SEU threshold, vira contorno.
+            # Se o is_anomaly for True, é matematicamente garantido que haverá desenho aqui.
+            custom_pred_mask = (anomaly_map >= 0.3).astype(np.uint8) * 255
 
+            decoded_image = apply_pred_mask_on_image(decoded_image, custom_pred_mask, color=(0,0,255))
             combined_frame = np.hstack((decoded_image, anomaly_map_colored))
             new_size = 640
             combined_frame = cv2.resize(combined_frame, (2*new_size,new_size), interpolation=cv2.INTER_LINEAR)
@@ -482,7 +436,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                 cv2.putText(combined_frame, "ANOMALIA - Confirmar (Y/N)?", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 2)
             
             cv2.imshow("Inferencia (Original | Mapa de Anomalia)", combined_frame)
-            
+
             # LEITURA DE TECLADO 
             key = cv2.waitKey(1) & 0xFF 
 
@@ -499,7 +453,7 @@ def serve_inference_to_pi(model, config, sock, threshold=0.9):
                     decision_buffer = 'N'
 
             is_anomaly = response in [b'P', b'A']
-            print(f"[{time.time() - start_time:.2f}s (Resposta:{t2:.2f}s)]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
+            print(f"[{time.time() - start_time:.2f}s (Inf.:{t2:.2f}s)]Score: {pred_score:.4f}, Anomalia: {is_anomaly}. Enviando flag...")
 
     except socket.timeout:
         print(f"[{Colors.YELLOW}Inferência{Colors.RESET}] Timeout. A Pi parou de enviar frames.")

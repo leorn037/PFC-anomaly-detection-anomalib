@@ -9,7 +9,7 @@ import time
 import numpy as np
 from cabo_tracker import CaboTracker
 
-def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 70):
+def send_tcp_frame(sock: socket.socket, frame: np.ndarray, quality: int = 95):
     """
     Codifica (JPEG) e envia um frame (com cabeçalho de tamanho)
     através de um socket TCP.
@@ -188,7 +188,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
             print(f"{Colors.RED}Erro inesperado: {e}{Colors.RESET}")
             break
     
-    print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas!{Colors.RESET}")
+    print(f"{Colors.GREEN}Todas as imagens foram recebidas e salvas em {save_path}!{Colors.RESET}")
     cv2.destroyAllWindows()
 
 # Função para enviar o modelo

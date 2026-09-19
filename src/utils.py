@@ -37,12 +37,13 @@ CONFIG = {
     "normal_test_dir": "data/test", # Imagens normais para teste
 
 
+
     #! Evaluate, folders, live
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
     "evaluate": False,
-    "use_openvino": False,
+    "use_openvino": True,
 
     "operation_mode" : 0, # Operação com modelo (0 = Treinamento, 1 = Inferência)
     "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
@@ -151,10 +152,10 @@ def print_config_summary(config: dict, mode: str = "rasp"):
     if mode == "rasp":
         keys_to_show = [
             "collect", "time_sample", "img_n", 
-            "receive_model", "network_inference", "visual_rasp"
+            "receive_model", "live", "network_inference",
             ]
     else: 
-        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "network_inference", "use_openvino" ]
+        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "live", "network_inference", "use_openvino" ]
 
     # 2. Crie uma string de separação para o cabeçalho
     separator = f"{Colors.CYAN}{'-'*40}{Colors.RESET}"

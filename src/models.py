@@ -15,10 +15,10 @@ MODEL_CONFIGS = {
     "PatchCore": {
         "class": Patchcore,
         "params": {
-            "backbone": "resnet50", # "resnet18" "wide_resnet50_2"
-            "layers": ("layer2", "layer3"), # "layer3", "layer4"
-            "coreset_sampling_ratio": 0.1,
-            "num_neighbors": 9
+            "backbone": "wide_resnet50_2", # "resnet18"  "resnet50"
+            "layers": ("layer2", "layer3"), #  ("layer1", "layer2")
+            "coreset_sampling_ratio": 0.05,
+            "num_neighbors": 1
         },
         "inference_params": {
             "pre_trained": True # Parâmetro específico para inferência
@@ -73,7 +73,7 @@ MODEL_CONFIGS = {
 
 }
 
-def setup_datamodule(config, dataset_root): # Recebe um objeto de configuração e retorna o Folder
+def setup_datamodule(config): # Recebe um objeto de configuração e retorna o Folder
     
     from anomalib.data import Folder
     from anomalib.data.utils import TestSplitMode, ValSplitMode
@@ -152,7 +152,8 @@ def create_model(config):
                         # Instancia o Inferencer Otimizado
                         model = OpenVINOInferencer(
                             path=str(ov_xml_path),
-                            device="CPU" # Força CPU (Ideal para seu AMD)
+                            device="CPU", # Força CPU (Ideal para seu AMD)
+                            config={"CACHE_DIR": "ov_cache"},
                         )
                         load_time = time.time() - start_time
                         print(f"{Colors.GREEN}SUCESSO: Modelo OpenVINO carregado em {load_time:.2f}s.{Colors.RESET}")
@@ -183,7 +184,9 @@ def create_model(config):
         end_time = time.time()
         load_time = end_time - start_time
         print(f"{Colors.GREEN} Modelo carregado em {load_time:.2f} segundos.{Colors.RESET}")
-    
+
+    print(model.post_processor)
+
     return model
 
 def train_model(model, datamodule, config): # Encapsula a lógica de treinamento, incluindo a verificação de checkpoints para retomar.
@@ -245,4 +248,14 @@ def get_latest_checkpoint(results_path: Path) -> Path:
     # O re.findall extrai todos os dígitos da string do nome do diretório
     # O int() converte esses dígitos para número real (ex: "v10" -> 10)
     version_dirs.sort(key=lambda d: int(re.findall(r'\d+', d.name)[0]) if re.findall(r'\d+', d.name) else 0)
-    
+
+def create_patchcore_custom(backbone, layers, coreset_sampling_ratio, num_neighbors, pre_processor):
+    """Cria um PatchCore com hiperparâmetros livres, pra uso em sweep — não depende do MODEL_CONFIGS fixo."""
+    from anomalib.models import Patchcore
+    return Patchcore(
+        pre_processor=pre_processor,
+        backbone=backbone,
+        layers=list(layers),
+        coreset_sampling_ratio=coreset_sampling_ratio,
+        num_neighbors=num_neighbors,
+    )

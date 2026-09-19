@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from collect_data import collect_and_split_dataset, setup_camera
 from network import receive_model_from_pc, live_inference_rasp_to_pc, pi_socket
-from inference import live_inference_rasp, visualize_imgs
+from inference import live_inference_rasp
 
 try:
     from gpiozero import OutputDevice
@@ -94,6 +94,7 @@ def run_inference(camera, conn, config, model):
     print(f"{Colors.BLUE}Iniciando detecção de anomalias...{Colors.RESET}")
     
     if config["live"]:
+        print("Visualização em tempo real")
         if config["network_inference"] and conn:
             ret = live_inference_rasp_to_pc(
                 camera, conn, config["image_size"], anomaly_output, move_output
@@ -106,18 +107,8 @@ def run_inference(camera, conn, config, model):
             #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
             live_inference_rasp(model, config, camera, anomaly_output)
     else:
-        # Visualização offline
-        #normal_dir = dataset_root / "test" / "normal"
-        normal_dir = Path(config["normal_dir"])
-        img_class="Normal"
-        visualize_imgs(normal_dir, model, img_class, config["image_size"])
-
-        # --- Processar imagens anômalas ---
-        abnormal_dir = Path(config["dataset_root"]) / "test" / "abnormal"
-        img_class = "Abnormal"
-        visualize_imgs(abnormal_dir, model, img_class, config["image_size"])
-
-        plt.close('all') 
+        print(f"{Colors.YELLOW}Modo offline nativo removido.{Colors.RESET}")
+        
 
 def main(camera):
     print(f"{Colors.GREEN}Iniciando Raspberry Pi Pipeline...{Colors.RESET}")
@@ -162,6 +153,7 @@ def main(camera):
 
 # TODO: receive_model_from_pc(): websocket e sincronização
 # TODO: live_inference_rasp(): anomaly_output e websocket
+# TODO: Modo offline na rasp após o novo modelo
 
 if __name__ == "__main__":
     print(f"{Colors.BLUE}Bibliotecas importadas em {time.time()-init_time:.2f} segundos.{Colors.RESET}")
