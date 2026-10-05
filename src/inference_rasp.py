@@ -102,7 +102,7 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
     try:
         while True:
             t_start_loop = time.time()
-            print(1)
+
             # 1. Captura do frame
             frame = picam2.capture_array()
             if frame is None:
@@ -110,13 +110,20 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
                 continue
             
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            print(2)
+
             # 2. Rastreamento e recorte do cabo
             frame_processed = tracker.track(frame_bgr)
-            print(3)
+
             # 3. Executa a inferência OpenVINO
             t_start_inf = time.time()
-            anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
+            try:
+                anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
+            except Exception as e:
+                print(f"ERRO FATAL DENTRO DO OPENVINO: {e}")
+                import traceback
+                traceback.print_exc()
+                break
+            
             t_inf_duration = time.time() - t_start_inf
 
             is_anomaly = pred_score >= threshold
