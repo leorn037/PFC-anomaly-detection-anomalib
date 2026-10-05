@@ -110,7 +110,7 @@ def run_inference(camera, conn, config, model):
                 return
 
             from inference_rasp import live_inference_rasp_lite   #TODO
-            live_inference_rasp_lite(config, camera, model, anomaly_output, move_output)
+            live_inference_rasp_lite(config, camera, model, conn, anomaly_output, move_output)
     else:
         print(f"{Colors.YELLOW}Modo offline nativo removido.{Colors.RESET}")
         

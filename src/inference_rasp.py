@@ -11,7 +11,7 @@ import numpy as np
 from openvino import Core  #!# não openvino.runtime — está deprecated (avisado no seu próprio log)
 from utils import Colors
 from cabo_tracker import CaboTracker
-
+from network import send_tcp_frame
 
 def preparar_modelo(model_xml_path):
     core = Core()
@@ -79,7 +79,7 @@ def inferir_frame(compiled_model, output_layer, espera_nchw, frame_bgr):
         
     return anomaly_map, pred_score
 
-def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None, move_output=None, pc_port=5005):
+def live_inference_rasp_lite(config, camera, model_xml_path, conn, anomaly_output=None, move_output=None, pc_port=5005):
     """
     Roda inferência de anomalia diretamente na Raspberry Pi, sem depender do
     Anomalib/PyTorch — só o grafo OpenVINO já exportado (model.xml + model.bin).
@@ -91,14 +91,9 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
 
     tracker = CaboTracker(crop_output_size=image_size)  #!# NOVO: aplicado antes de inferir, faltava isso
 
-    sock_vis = None
-    if config.get("network_inference", True):
-        sock_vis = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock_vis.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)   #!# NOVO: habilita broadcast nesse socket
-
     threshold = config.get("anomaly_threshold", 0.5)
-
     inference_count = 0
+
     if move_output:
         print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal inicial: MOVER (HIGH)")
         move_output.on()
@@ -126,14 +121,14 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
             #!anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
             pred_score = 0.0
             anomaly_map = cv2.cvtColor(frame_processed, cv2.COLOR_BGR2GRAY) * 0.0
-
             t_inf_duration = time.time() - t_start_inf
 
             is_anomaly = pred_score >= threshold
-            print(4)
+
             # 4. Lógica de Atuação GPIO e Logs de Decisão
             if is_anomaly:
                 if move_output: move_output.off()   #!# só PARA o robô — nada de atuador ainda
+                status_str = "ANOMALIA"
                 # TODO: acionar o maçarico de verdade aqui quando o pipeline
                 # TODO estiver validado. De propósito, hoje só imprime — evita
                 # TODO acionar o atuador por engano enquanto ainda há risco de bug
@@ -143,31 +138,34 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
                       f"queima NÃO acionada (placeholder).{Colors.RESET}")
             else:
                 if move_output: move_output.on()
+                status_str = "NORMAL"
 
+            # 5. Visualização (prepara o frame combinado para enviar ao PC, igual você fazia antes)
+            anomaly_map_normalized = (anomaly_map * 255).astype(np.uint8)
+            anomaly_map_resized = cv2.resize(anomaly_map_normalized, (frame_processed.shape[1], frame_processed.shape[0]), interpolation=cv2.INTER_LINEAR)
+            anomaly_map_colored = cv2.applyColorMap(anomaly_map_resized, cv2.COLORMAP_JET)
+            
+            # Junta a imagem processada com o mapa de calor lado a lado
+            combined_frame = np.hstack((frame_processed, anomaly_map_colored))
 
             # Print mais limpo para frames normais para não inundar o terminal
             print(f"[{Colors.CYAN}INF{Colors.RESET}] Frame {inference_count:04d} | Score: {pred_score:.4f} | Inf: {t_inf_duration:.4f}s | Status: []")
 
-            # 5. Envio UDP para visualização remota no PC
-            if sock_vis:
+            # 6. Envio TCP usando a sua função pronta!
+            if conn:
                 try:
-                    _enviar_visualizacao_udp(sock_vis, pc_port, frame_processed, anomaly_map, pred_score)
+                    # Envia o frame comprimido em JPEG com o cabeçalho de tamanho
+                    send_tcp_frame(conn, combined_frame, quality=80)
                 except Exception as net_err:
-                    print(f"[{Colors.YELLOW}REDE-AVISO{CV.RESET}] Erro ao enviar UDP: {net_err}")
-
+                    print(f"[{Colors.RED}TCP-ERRO{Colors.RESET}] Falha ao enviar frame: {net_err}")
+                    break
             inference_count += 1
-        
-            # ---> RESPIRAÇÃO DA CPU: Evita o travamento da câmera (timeout) <---
-            elapsed = time.time() - t_start_loop
-            if elapsed < 0.1:  # Garante um intervalo saudável para a placa respirar
-                time.sleep(0.1 - elapsed)
+            print(f"[INF] Frame {inference_count:04d} | Score: {pred_score:.4f} | Status: {status_str}")
+
     except KeyboardInterrupt:
-        print(f"{Colors.YELLOW}Interrompido pelo usuário.{Colors.RESET}")
+        print(f"\n{Colors.YELLOW}Interrompido pelo usuário.{Colors.RESET}")
     finally:
-        picam2.stop()
-        print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")
-        if sock_vis:             
-            sock_vis.close()     
+        print(f"{Colors.CYAN}Inferência encerrada.{Colors.RESET}") 
               
 def _enviar_visualizacao_udp(sock, pc_port, frame_bgr, anomaly_map, score):
     """Manda frame + mapa colorido pro PC via UDP, só pra visualização.
