@@ -77,9 +77,7 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
     Roda inferência de anomalia diretamente na Raspberry Pi, sem depender do
     Anomalib/PyTorch — só o grafo OpenVINO já exportado (model.xml + model.bin).
     """
-    print(2)
     compiled_model, output_layer, espera_nchw = preparar_modelo(model_xml_path)
-    print(3)
 
     picam2 = camera
     image_size = config["image_size"]
@@ -90,7 +88,7 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
     if config.get("network_inference", True):
         sock_vis = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock_vis.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)   #!# NOVO: habilita broadcast nesse socket
-    
+
     threshold = config.get("anomaly_threshold", 0.5)
 
     inference_count = 0
@@ -104,25 +102,25 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
     try:
         while True:
             t_start_loop = time.time()
-            
+            print(1)
             # 1. Captura do frame
             frame = picam2.capture_array()
             if frame is None:
                 print(f"[{Colors.RED}ERRO{Colors.RESET}] Falha ao capturar frame da câmera.")
                 continue
-                
+            
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
+            print(2)
             # 2. Rastreamento e recorte do cabo
             frame_processed = tracker.track(frame_bgr)
-
+            print(3)
             # 3. Executa a inferência OpenVINO
             t_start_inf = time.time()
             anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
             t_inf_duration = time.time() - t_start_inf
 
             is_anomaly = pred_score >= threshold
-
+            print(4)
             # 4. Lógica de Atuação GPIO e Logs de Decisão
             if is_anomaly:
                 if move_output: move_output.off()   #!# só PARA o robô — nada de atuador ainda
@@ -143,7 +141,7 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
             # 5. Envio UDP para visualização remota no PC
             if sock_vis:
                 try:
-                    _enviar_visualizacao_udp(sock_vis, pc_port, frame_processed, anomaly_map, pred_score, pc_ip)
+                    _enviar_visualizacao_udp(sock_vis, pc_port, frame_processed, anomaly_map, pred_score)
                 except Exception as net_err:
                     print(f"[{Colors.YELLOW}REDE-AVISO{CV.RESET}] Erro ao enviar UDP: {net_err}")
 
