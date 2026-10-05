@@ -52,7 +52,6 @@ def preparar_modelo(model_xml_path):
 
 def inferir_frame(compiled_model, output_layer, espera_nchw, frame_bgr):
     frame_float = frame_bgr.astype(np.float32) / 255.0
-    print(1)
     if espera_nchw:
         input_tensor = np.expand_dims(np.transpose(frame_float, (2, 0, 1)), 0)
     else:
@@ -153,7 +152,11 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
                     print(f"[{Colors.YELLOW}REDE-AVISO{CV.RESET}] Erro ao enviar UDP: {net_err}")
 
             inference_count += 1
-
+        
+            # ---> RESPIRAÇÃO DA CPU: Evita o travamento da câmera (timeout) <---
+            elapsed = time.time() - t_start_loop
+            if elapsed < 0.1:  # Garante um intervalo saudável para a placa respirar
+                time.sleep(0.1 - elapsed)
     except KeyboardInterrupt:
         print(f"{Colors.YELLOW}Interrompido pelo usuário.{Colors.RESET}")
     finally:
