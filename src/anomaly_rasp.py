@@ -105,6 +105,7 @@ def run_inference(camera, conn, config, model):
             return ret == "DISCONNECTED"
         
         else:
+            print(1)
             if model is None: 
                 print(f"{Colors.RED}Modelo necessário para visualização offline.{Colors.RESET}")
                 return

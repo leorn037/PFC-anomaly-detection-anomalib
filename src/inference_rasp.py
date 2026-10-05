@@ -77,7 +77,9 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
     Roda inferência de anomalia diretamente na Raspberry Pi, sem depender do
     Anomalib/PyTorch — só o grafo OpenVINO já exportado (model.xml + model.bin).
     """
+    print(2)
     compiled_model, output_layer, espera_nchw = preparar_modelo(model_xml_path)
+    print(3)
 
     picam2 = camera
     image_size = config["image_size"]
@@ -88,22 +90,40 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
     if config.get("network_inference", True):
         sock_vis = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock_vis.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)   #!# NOVO: habilita broadcast nesse socket
-
+    
     threshold = config.get("anomaly_threshold", 0.5)
 
-    print(f"{Colors.GREEN}Inferência leve (OpenVINO puro) iniciada. Ctrl+C pra sair.{Colors.RESET}")
+    inference_count = 0
+    if move_output:
+        print(f"[{Colors.YELLOW}ROBÔ{Colors.RESET}] Enviando sinal inicial: MOVER (HIGH)")
+        move_output.on()
+
+    print(f"\n{Colors.GREEN}{Colors.BOLD}--- Inferência Nativa OpenVINO (Raspberry Pi) Iniciada ---{Colors.RESET}")
+    print(f" Pressione {Colors.YELLOW}Ctrl+C{Colors.RESET} no terminal para encerrar.\n")
 
     try:
         while True:
-            start_time = time.time()
-            frame = picam2.capture_array()  # (H, W, C), já em BGR (format="BGR888")
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            t_start_loop = time.time()
             
-            frame = tracker.track(frame_bgr)
+            # 1. Captura do frame
+            frame = picam2.capture_array()
+            if frame is None:
+                print(f"[{Colors.RED}ERRO{Colors.RESET}] Falha ao capturar frame da câmera.")
+                continue
+                
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-            anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame)
+            # 2. Rastreamento e recorte do cabo
+            frame_processed = tracker.track(frame_bgr)
+
+            # 3. Executa a inferência OpenVINO
+            t_start_inf = time.time()
+            anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
+            t_inf_duration = time.time() - t_start_inf
+
             is_anomaly = pred_score >= threshold
 
+            # 4. Lógica de Atuação GPIO e Logs de Decisão
             if is_anomaly:
                 if move_output: move_output.off()   #!# só PARA o robô — nada de atuador ainda
                 # TODO: acionar o maçarico de verdade aqui quando o pipeline
@@ -116,12 +136,18 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
             else:
                 if move_output: move_output.on()
 
-            elapsed = time.time() - start_time
-            print(f"[{elapsed:.3f}s] Score: {pred_score:.4f}")
 
+            # Print mais limpo para frames normais para não inundar o terminal
+            print(f"[{Colors.CYAN}INF{Colors.RESET}] Frame {inference_count:04d} | Score: {pred_score:.4f} | Inf: {t_inf_duration:.4f}s | Status: []")
+
+            # 5. Envio UDP para visualização remota no PC
             if sock_vis:
-                 _enviar_visualizacao_udp(sock_vis, pc_port, frame, anomaly_map, pred_score)
- 
+                try:
+                    _enviar_visualizacao_udp(sock_vis, pc_port, frame_processed, anomaly_map, pred_score, pc_ip)
+                except Exception as net_err:
+                    print(f"[{Colors.YELLOW}REDE-AVISO{CV.RESET}] Erro ao enviar UDP: {net_err}")
+
+            inference_count += 1
 
     except KeyboardInterrupt:
         print(f"{Colors.YELLOW}Interrompido pelo usuário.{Colors.RESET}")
