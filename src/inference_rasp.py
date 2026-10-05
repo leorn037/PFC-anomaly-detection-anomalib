@@ -81,9 +81,6 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
 
     picam2 = camera
     image_size = config["image_size"]
-    picam2.configure(picam2.create_preview_configuration(
-        main={"size": (image_size, image_size), "format": "BGR888"}))
-    picam2.start()
 
     tracker = CaboTracker(crop_output_size=image_size)  #!# NOVO: aplicado antes de inferir, faltava isso
 
