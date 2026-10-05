@@ -134,6 +134,13 @@ def main(camera):
         # 3. Recebimento de modelo
         if not config["network_inference"]:   #TODO: Função de receber modelo
             receive_model(config, config["pi_port"])
+
+        # 3. Recebimento de modelo
+        if not config["network_inference"]:
+            model = receive_model(config, config["pi_port"])
+            if model is None:
+                print(f"{Colors.RED}Impossível prosseguir sem modelo.{Colors.RESET}")
+                return False
         
         # 4. Inferência/Visualização
         if run_inference(camera, conn, config, model):

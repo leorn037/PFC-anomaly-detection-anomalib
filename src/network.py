@@ -411,73 +411,82 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
 
 def receive_and_process_data():
     """
-    Função que escuta continuamente por datagramas UDP em um socket e processa os dados recebidos.
-    Executa na thread principal, sem uso de threads separadas.
+    Recebe os pacotes UDP fragmentados enviados pela Raspberry Pi, 
+    remonta o dicionário, decodifica as imagens JPEG e exibe a visualização.
+    Executa na thread principal do PC.
     """
-    import numpy as np
+
     UDP_IP = "0.0.0.0"
     UDP_PORT = 5005
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
     
-    # Configura um timeout para o socket (opcional, mas recomendado)
-    # Isso impede que o programa fique bloqueado indefinidamente se a Raspberry Pi parar de enviar dados
-    sock.settimeout(5.0) 
+    # Timeout curto para não prender o terminal e permitir limpar lixo da rede
+    sock.settimeout(2.0) 
     
     data_buffer = bytearray()
     
-    print(f"{Colors.CYAN}Aguardando datagramas UDP em {UDP_IP}:{UDP_PORT}{Colors.RESET}")
-    print(f"Pressione {Colors.YELLOW}Ctrl+C{Colors.RESET} no terminal para encerrar.")
+    print(f"{Colors.CYAN}Aguardando stream de visualização UDP em {UDP_IP}:{UDP_PORT}...{Colors.RESET}")
+    print(f"Pressione {Colors.YELLOW}'q'{Colors.RESET} na janela do OpenCV para encerrar.")
     
     try:
         while True:
             try:
-                # Recebe o datagrama (agora com timeout)
+                # Recebe o pedaço do pacote (chunk) de até 65KB e adiciona ao buffer
                 packet, _ = sock.recvfrom(65536)
                 data_buffer.extend(packet)
                 
-                # Tenta desserializar o conteúdo
                 try:
+                    # Tenta desserializar o buffer acumulado. 
+                    # Se faltarem pedaços, isto gera um erro e vai para o "except"
                     data = pickle.loads(data_buffer)
+                    
+                    # Se funcionou, esvazia o buffer para preparar para o próximo frame
                     data_buffer.clear()
     
-                    # Processamento dos dados
+                    # Extrai os dados do dicionário enviado pela Rasp
                     original_bytes = data['original_frame']
                     anomaly_bytes = data['anomaly_map']
                     score = data['score']
     
+                    # Decodifica os bytes JPEG de volta para Matrizes de Imagem (OpenCV)
                     original_img = cv2.imdecode(np.frombuffer(original_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-                    original_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
                     anomaly_img = cv2.imdecode(np.frombuffer(anomaly_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     
                     if original_img is not None and anomaly_img is not None:
-                        # Coloca score na imagem original
-                        cv2.putText(original_img, f"Score: {score:.4f}", (10, 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
+                        # Junta a imagem contornada com o mapa de calor
                         combined_frame = np.hstack((original_img, anomaly_img))
-                        cv2.imshow("Inferência em Tempo Real", combined_frame)
+                        
+                        # Escreve o Score recebido por cima da imagem
+                        color = (0, 0, 255) if score >= 0.5 else (0, 255, 0)
+                        cv2.putText(combined_frame, f"Score: {score:.4f}", (10, 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
     
-                        # A função `waitKey` é necessária para atualizar a janela do OpenCV
-                        # Se for 1ms, o programa não vai pausar.
-                        if cv2.waitKey(1) & 0xFF == ord('q'):
-                            print(f"{Colors.YELLOW}Sinal de parada 'q' detectado. Encerrando...{Colors.RESET}")
-                            break
-                    else:
-                        print(f"{Colors.YELLOW}Aviso: Dados de imagem incompletos recebidos.{Colors.RESET}")
-                
-                except pickle.UnpicklingError:
-                    # Continua acumulando dados se não conseguir desserializar
-                    continue
-                except Exception as e:
-                    print(f"{Colors.RED}Erro inesperado ao processar datagrama UDP: {e}{Colors.RESET}")
+                        cv2.imshow("Inferencia Nativa (Raspberry Pi)", combined_frame)
+    
+                    # Sai se premir 'q'
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        print(f"{Colors.YELLOW}Saindo da visualização...{Colors.RESET}")
+                        break
+                        
+                except (pickle.UnpicklingError, EOFError):
+                    # O pacote Pickle ainda está incompleto. Faltam pedaços UDP chegarem.
+                    # PROTEÇÃO: Se um pedaço se perder na rede, o buffer vai acumular lixo
+                    # infinitamente e nunca mais vai abrir. Se passar de 500KB, limpamos o lixo!
+                    if len(data_buffer) > 500000:
+                        data_buffer.clear()
+                    pass
+                    
             except socket.timeout:
-                # Se o timeout for atingido, o loop continua
+                # Se ficar 2 segundos sem receber nada, limpa eventuais lixos no buffer
+                if len(data_buffer) > 0:
+                    data_buffer.clear()
                 continue
+
     except KeyboardInterrupt:
-        print(f"{Colors.YELLOW}Programa encerrado por Ctrl+C.{Colors.RESET}")
+        print(f"\n{Colors.YELLOW}Visualização encerrada por Ctrl+C.{Colors.RESET}")
     finally:
         cv2.destroyAllWindows()
         sock.close()
-        print(f"{Colors.CYAN}Visualização e socket encerrados.{Colors.RESET}")
+        
