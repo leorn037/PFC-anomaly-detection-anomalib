@@ -37,8 +37,6 @@ CONFIG = {
     "normal_test_dir": "data/test", # Imagens normais para teste
 
 
-
-    #! Evaluate, folders, live
     # Model configs
     "model_name": 'PatchCore',
     "ckpt_path": None,
@@ -46,7 +44,7 @@ CONFIG = {
     "use_openvino": True,
 
     "operation_mode" : 0, # Operação com modelo (0 = Treinamento, 1 = Inferência)
-    "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp
+    "network_inference" : True, # Executa inferência no PC com imagens da Raspberry, False: inferência na rasp se use_openvino: True
 
     # Visualização
     "live" : True, # Inferência em tempo real, False: Inferência em imagens salvas

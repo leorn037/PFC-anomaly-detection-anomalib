@@ -1,14 +1,16 @@
 from utils import Colors, CONFIG as config, anomaly_args, print_config_summary
 anomaly_args(config,"rasp")
 print_config_summary(config, "rasp")
+
 import time
 init_time = time.time()
+
 from pathlib import Path
 import matplotlib.pyplot as plt
 
 from collect_data import collect_and_split_dataset, setup_camera
 from network import receive_model_from_pc, live_inference_rasp_to_pc, pi_socket
-from inference import live_inference_rasp
+
 
 try:
     from gpiozero import OutputDevice
@@ -66,28 +68,29 @@ def collect_dataset(camera, conn, config):
     )
     return ret == "DISCONNECTED"
 
-def receive_model(config, port):
-    """Recebe modelo do PC e atualiza configuração."""
-    if not config["receive_model"]:
-        print(f"{Colors.YELLOW}Recebimento de Modelo Desabilitado.{Colors.RESET}")
-        return None
-    
-    start_time = time.time()
-    from models import MODEL_CONFIGS
-    #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
-    dict_model = receive_model_from_pc(port, config["model_output_dir"])
-    receive_time = time.time() - start_time
-    
-    # Atualiza config
-    config['model_name'] = dict_model['model_name']
-    MODEL_CONFIGS[config['model_name']]['params'] = dict_model['model_params']
-    MODEL_CONFIGS[config['model_name']]['inference_params'] = dict_model['model_inference_params']
-    config['ckpt_path'] = dict_model['ckpt_path']
-    
-    print(f"{Colors.BLUE}Modelo recebido em {receive_time:.2f}s.{Colors.RESET}")
 
-    #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
-    # return model
+def receive_model(config, port):
+    """
+    Garante que o model.xml/model.bin estejam disponíveis localmente: busca do
+    PC via rede se receive_model=True, ou só confirma o que já está lá se
+    False. Retorna o caminho do model.xml, ou None se não encontrado.
+    """
+    xml_path = Path(config["model_output_dir"]) / "model.xml"
+    bin_path = Path(config["model_output_dir"]) / "model.bin"
+
+    if config["receive_model"]:
+        start_time = time.time()
+        from network import receive_model_from_pc   #TODO
+        receive_model_from_pc(port, config["model_output_dir"])
+        print(f"{Colors.BLUE}Modelo (OpenVINO) recebido em {time.time()-start_time:.2f}s.{Colors.RESET}")
+    else:
+        print(f"{Colors.YELLOW}Recebimento de Modelo Desabilitado (assumindo que já está local).{Colors.RESET}")
+
+    if not (xml_path.exists() and bin_path.exists()):
+        print(f"{Colors.RED}model.xml/model.bin não encontrados em {config['model_output_dir']}. ")
+        return None
+
+    return xml_path
 
 def run_inference(camera, conn, config, model):
     """Executa inferência baseada no modo."""
@@ -100,12 +103,14 @@ def run_inference(camera, conn, config, model):
                 camera, conn, config["image_size"], anomaly_output, move_output
             )
             return ret == "DISCONNECTED"
+        
         else:
             if model is None: 
                 print(f"{Colors.RED}Modelo necessário para visualização offline.{Colors.RESET}")
-            
-            #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
-            live_inference_rasp(model, config, camera, anomaly_output)
+                return
+
+            from inference_rasp import live_inference_rasp_lite   #TODO
+            live_inference_rasp_lite(config, camera, model, anomaly_output, move_output)
     else:
         print(f"{Colors.YELLOW}Modo offline nativo removido.{Colors.RESET}")
         
@@ -114,6 +119,7 @@ def main(camera):
     print(f"{Colors.GREEN}Iniciando Raspberry Pi Pipeline...{Colors.RESET}")
     
     conn, server_sock = None, None
+    model = None
     
     try:
         # 1. Configuração do Servidor Único
@@ -126,11 +132,10 @@ def main(camera):
             return True  # Se desconectar durante a funçãomanda reiniciar a main
         
         # 3. Recebimento de modelo
-        #TODO: Usar modelo openvino recebido do pc para inferencia na rasp
-        # Talvez não seja neessário retornar model
-        model = receive_model(config, config["pi_port"])
+        if not config["network_inference"]:   #TODO: Função de receber modelo
+            receive_model(config, config["pi_port"])
         
-        # 5. Inferência/Visualização
+        # 4. Inferência/Visualização
         if run_inference(camera, conn, config, model):
             if conn: conn.close()
             if server_sock: server_sock.close()

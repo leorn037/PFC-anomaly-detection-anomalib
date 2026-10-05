@@ -59,7 +59,6 @@ def pi_socket(pi_port):
         return None, None
 
 def pi_connect(pi_ip, pi_port):
-        
         while True: # Loop de retry da conexão principal
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -192,35 +191,22 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
     cv2.destroyAllWindows()
 
 # Função para enviar o modelo
-def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
+def send_model_to_pi(openvino_dir: Path, config: dict):
     """
-    Envia o arquivo do modelo (.ckpt) e suas configurações via socket TCP.
+    Envia model.xml + model.bin para a Raspberry Pi via socket TCP.
 
     Args:
-        model_path (Path): O caminho para o arquivo do modelo.
-        config (dict): O dicionário de configuração principal.
-        model_configs (dict): O dicionário de configurações dos modelos.
+        openvino_dir (Path): Pasta onde estão model.xml e model.bin.
+        config (dict): O dicionário de configuração principal (usa pi_ip, pi_port).
     """
     pi_ip = config["pi_ip"]
     pi_port = config["pi_port"]
-    if not model_path.exists():
-        print(f"{Colors.RED}Erro: Arquivo do modelo não encontrado em {model_path}{Colors.RESET}")
-        return
+    files_to_send = [openvino_dir / "model.xml", openvino_dir / "model.bin"]
 
-    # 2. Reúna todas as informações em um único dicionário
-    model_name = config["model_name"]
-    file_size = os.path.getsize(model_path)
-    
-    # 1. Prepara o cabeçalho (configurações + info do arquivo)
-    header_payload = {
-        'model_name': model_name,
-        'model_params': model_configs[model_name]["params"],
-        'model_inference_params': model_configs[model_name].get("inference_params", {}),
-        'file_size': file_size
-    }
-        
-    serialized_header = pickle.dumps(header_payload)
-    header_size = struct.pack("!I", len(serialized_header))
+    for file_path in files_to_send:
+        if not file_path.exists():
+            print(f"{Colors.RED}Erro: Arquivo não encontrado em {file_path}{Colors.RESET}")
+            return
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -228,16 +214,23 @@ def send_model_to_pi(model_path: Path, config: dict, model_configs: dict):
             sock.connect((pi_ip, pi_port))
 
             # 2. Envia o tamanho e o cabeçalho primeiro
-            sock.sendall(header_size + serialized_header)
+            sock.sendall(struct.pack("!I", len(files_to_send)))
             
             # 3. Envia o arquivo em blocos diretamente do disco
-            print(f"Iniciando envio do arquivo '{model_name}.ckpt' ({file_size} bytes)...")
-            with open(model_path, 'rb') as f:
-                while True:
-                    bytes_read = f.read(4096) # Lê em blocos de 4KB
-                    if not bytes_read:
-                        break # Fim do arquivo
-                    sock.sendall(bytes_read)
+            for file_path in files_to_send:
+                file_size = os.path.getsize(file_path)
+                header = f"{file_path.name}|{file_size}".encode()
+                sock.sendall(struct.pack("!I", len(header)) + header)
+
+                print(f"Iniciando envio do arquivo '{file_path.name}' ({file_size} bytes)...")
+                with open(file_path, 'rb') as f:
+                    while True:
+                        bytes_read = f.read(4096)
+                        if not bytes_read:
+                            break
+                        sock.sendall(bytes_read)
+                        
+                print(f"{Colors.GREEN}'{file_path.name}' enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
 
             print(f"{Colors.GREEN}Modelo enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
             
@@ -270,61 +263,47 @@ def receive_model_from_pc(server_port: int, output_dir: str):
         conn, addr = server_sock.accept()
         
         with conn:
-            training_time = time.time()
-            print(f"{Colors.GREEN}Conexão aceita de {addr} após {training_time - start_time} segundos. Recebendo modelo...{Colors.RESET}")
-            
+            print(f"{Colors.GREEN}Conexão aceita de {addr}. Recebendo arquivos...{Colors.RESET}")
+
             # 1. Recebe o tamanho do cabeçalho
-            header_size_data = conn.recv(4)
-            if not header_size_data:
+            num_files_data = conn.recv(4)
+            if not num_files_data:
                 print(f"{Colors.RED}Erro: Conexão encerrada antes de receber o cabeçalho.{Colors.RESET}")
                 return None
-            header_size = struct.unpack("!I", header_size_data)[0]
+            num_files = struct.unpack("!I", num_files_data)[0]
 
-                        # 2. Recebe o cabeçalho e o desserializa
-            header = conn.recv(header_size)
-            header_payload = pickle.loads(header)
-            
-            # 4. Extrai os dados
-            model_name = header_payload['model_name']
-            model_params = header_payload['model_params']
-            model_inference_params = header_payload.get("model_inference_params")
+            xml_path = None
+            for _ in range(num_files):
+                header_size = struct.unpack("!I", conn.recv(4))[0]
+                header = conn.recv(header_size).decode().split('|')
+                filename, file_size = header[0], int(header[1])
 
-            # Extrai os dados do cabeçalho
-            file_size = header_payload['file_size']
-            
-            file_path = output_path / f"{model_name}.ckpt"
-            bytes_received = 0
+                file_path = output_path / filename
+                bytes_received = 0
+                print(f"{Colors.BLUE}Recebendo '{filename}': 0.00% [0 / {file_size//1024} KB]{Colors.RESET}", end="\r")
+                with open(file_path, 'wb') as f:
+                    while bytes_received < file_size:
+                        chunk = conn.recv(4096)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        bytes_received += len(chunk)
+                        if bytes_received % 102400 == 0 or bytes_received == file_size:
+                            progress = (bytes_received / file_size) * 100
+                            print(f"{Colors.BLUE}Recebendo '{filename}': {progress:.2f}% "
+                                  f"[{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
 
-            # 3. Salva o arquivo em disco em blocos
-            print(f"{Colors.BLUE}Recebendo arquivo '{model_name}': 0.00% [0 / ({file_size//1024} KB]{Colors.RESET}", end="\r")
-            with open(file_path, 'wb') as f:
-                while bytes_received < file_size:
-                    chunk = conn.recv(4096) # Recebe dados em blocos
-                    if not chunk: break
-                    f.write(chunk)
-                    bytes_received += len(chunk)
+                if bytes_received != file_size:
+                    print(f"\n{Colors.YELLOW}Aviso: '{filename}' incompleto ({bytes_received}/{file_size} bytes).{Colors.RESET}")
+                    return None
 
-                    # Exibe o progresso a cada 100KB recebidos para não sobrecarregar
-                    if bytes_received % 102400 == 0 or bytes_received == file_size:
-                        progress = (bytes_received / file_size) * 100
-                        print(f"{Colors.BLUE}Recebendo dados: {progress:.2f}% [{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
-                
-            if bytes_received == file_size:
-                print(f"\n{Colors.GREEN}Arquivo '{model_name}.ckpt' recebido com sucesso!{Colors.RESET}")
-            else:
-                print(f"{Colors.YELLOW}Aviso: Conexão encerrada prematuramente. Arquivo pode estar incompleto.{Colors.RESET}")
-                return None
-            
-            receive_time = time.time() - training_time
-            print(f"{Colors.GREEN}Modelo e configurações recebidos com sucesso após {receive_time:.2f} segundos!{Colors.RESET}")
-            
-            # Retorna as configurações para o script principal
-            return {
-                "model_name": model_name,
-                "model_params": model_params,
-                "model_inference_params": model_inference_params,
-                "ckpt_path": str(file_path)
-            }
+                print(f"\n{Colors.GREEN}'{filename}' recebido com sucesso!{Colors.RESET}")
+                if filename == "model.xml":
+                    xml_path = file_path
+
+            receive_time = time.time() - start_time
+            print(f"{Colors.GREEN}Todos os arquivos recebidos em {receive_time:.2f}s!{Colors.RESET}")
+            return xml_path
 
 def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, move_output = None):
     """
