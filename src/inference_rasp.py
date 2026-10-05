@@ -56,7 +56,15 @@ def inferir_frame(compiled_model, output_layer, espera_nchw, frame_bgr):
         input_tensor = np.expand_dims(np.transpose(frame_float, (2, 0, 1)), 0)
     else:
         input_tensor = np.expand_dims(frame_float, 0)
-    print(2)
+
+    print("=== DEBUG OPENVINO ===", flush=True)
+    print("Shape:", input_tensor.shape, flush=True)
+    print("Dtype:", input_tensor.dtype, flush=True)
+    print("Contiguous:", input_tensor.flags["C_CONTIGUOUS"], flush=True)
+    print("Nbytes:", input_tensor.nbytes, flush=True)
+    print("======================", flush=True)
+
+
     results = compiled_model([input_tensor])
     print(3)
     # Extrai a matriz da camada selecionada
