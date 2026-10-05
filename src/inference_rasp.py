@@ -52,17 +52,17 @@ def preparar_modelo(model_xml_path):
 
 def inferir_frame(compiled_model, output_layer, espera_nchw, frame_bgr):
     frame_float = frame_bgr.astype(np.float32) / 255.0
-
+    print(1)
     if espera_nchw:
         input_tensor = np.expand_dims(np.transpose(frame_float, (2, 0, 1)), 0)
     else:
         input_tensor = np.expand_dims(frame_float, 0)
-
+    print(2)
     results = compiled_model([input_tensor])
-    
+    print(3)
     # Extrai a matriz da camada selecionada
     anomaly_map = np.squeeze(results[output_layer])
-    
+    print(4)    
     # Se o anomaly_map tiver o shape correto (ex: 256x256), o score é o valor máximo dele
     if anomaly_map.ndim >= 2:
         pred_score = float(np.max(anomaly_map))
@@ -123,7 +123,7 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
                 import traceback
                 traceback.print_exc()
                 break
-            
+
             t_inf_duration = time.time() - t_start_inf
 
             is_anomaly = pred_score >= threshold
