@@ -97,7 +97,9 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
         while True:
             start_time = time.time()
             frame = picam2.capture_array()  # (H, W, C), já em BGR (format="BGR888")
-            frame = tracker.track(frame)
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            
+            frame = tracker.track(frame_bgr)
 
             anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame)
             is_anomaly = pred_score >= threshold
@@ -127,7 +129,8 @@ def live_inference_rasp_lite(config, camera, model_xml_path, anomaly_output=None
         picam2.stop()
         print(f"{Colors.CYAN}Câmera liberada.{Colors.RESET}")
         if sock_vis:             
-            sock_vis.close()       
+            sock_vis.close()     
+              
 def _enviar_visualizacao_udp(sock, pc_port, frame_bgr, anomaly_map, score):
     """Manda frame + mapa colorido pro PC via UDP, só pra visualização.
     Best-effort: qualquer falha é ignorada — nunca afeta a inferência real."""
