@@ -81,8 +81,13 @@ def receive_model(config, port):
     if config["receive_model"]:
         start_time = time.time()
         from network import receive_model_from_pc   #TODO
-        receive_model_from_pc(port, config["model_output_dir"])
-        print(f"{Colors.BLUE}Modelo (OpenVINO) recebido em {time.time()-start_time:.2f}s.{Colors.RESET}")
+        xml_received = receive_model_from_pc(port, config["model_output_dir"])
+
+        if xml_received:
+            print(f"{Colors.BLUE}Modelo (OpenVINO) recebido em {time.time()-start_time:.2f}s.{Colors.RESET}")
+        else:
+            print(f"{Colors.RED}Falha ao receber o modelo do PC.{Colors.RESET}")
+            return None
     else:
         print(f"{Colors.YELLOW}Recebimento de Modelo Desabilitado (assumindo que já está local).{Colors.RESET}")
 

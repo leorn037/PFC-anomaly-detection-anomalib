@@ -79,10 +79,13 @@ def send_trained_model(config):
     # Encontre o caminho do checkpoint mais recente
     results_path = Path("results") / config["model_name"] / config["folder_name"]
     model_path = get_latest_checkpoint(results_path)
+
+    # Procura a pasta OpenVINO exportada correspondente ao checkpoint
+    openvino_dir = model_path.parent.parent / "openvino" / "model" # Ajuste o caminho se necessário para onde estão o .xml e .bin
     
-    if model_path and config["receive_model"] and config["live"]:
+    if openvino_dir.exists() and config["receive_model"] and config["live"]:
         #TODO: Usar modelo openvino para inferencia na rasp
-        send_model_to_pi(model_path, config, MODEL_CONFIGS)
+        send_model_to_pi(openvino_dir, config, MODEL_CONFIGS)
 
 def run_inference(config, model, sock):
     """Executa inferência baseada na configuração."""
@@ -95,7 +98,7 @@ def run_inference(config, model, sock):
         # Inferencia na rasp com vizualização no pc
         else:
             # Envio de imagens via websocket da Raspberry para o PC
-            receive_and_process_data()
+            receive_and_process_data(sock)
     else:
         print(f"{Colors.YELLOW}Modo offline nativo removido. Conecte o simular_rasp.py.{Colors.RESET}")        
 

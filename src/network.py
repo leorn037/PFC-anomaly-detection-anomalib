@@ -409,84 +409,66 @@ def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, m
     except KeyboardInterrupt:
         print(f"{Colors.YELLOW}Ctrl+C detectado. Encerrando...{Colors.RESET}")
 
-def receive_and_process_data():
+def receive_and_process_data(sock):
     """
-    Recebe os pacotes UDP fragmentados enviados pela Raspberry Pi, 
-    remonta o dicionário, decodifica as imagens JPEG e exibe a visualização.
-    Executa na thread principal do PC.
+    Recebe o stream TCP de frames processados e mapas de calor vindos da Raspberry Pi,
+    exibindo a visualização combinada em tempo real no PC.
     """
+    if not sock:
+        print(f"[{Colors.RED}Erro{Colors.RESET}] Socket TCP inválido para recepção.")
+        return
 
-    UDP_IP = "0.0.0.0"
-    UDP_PORT = 5005
-    
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((UDP_IP, UDP_PORT))
-    
-    # Timeout curto para não prender o terminal e permitir limpar lixo da rede
-    sock.settimeout(2.0) 
-    
-    data_buffer = bytearray()
-    
-    print(f"{Colors.CYAN}Aguardando stream de visualização UDP em {UDP_IP}:{UDP_PORT}...{Colors.RESET}")
-    print(f"Pressione {Colors.YELLOW}'q'{Colors.RESET} na janela do OpenCV para encerrar.")
-    
+    sock.settimeout(None)
+
+    print(f"\n{Colors.GREEN}{Colors.BOLD}--- Servidor de Visualização TCP (PC) Iniciado ---{Colors.RESET}")
+    print(f"Pressione {Colors.YELLOW}'q'{Colors.RESET} na janela do OpenCV para encerrar.\n")
     try:
         while True:
-            try:
-                # Recebe o pedaço do pacote (chunk) de até 65KB e adiciona ao buffer
-                packet, _ = sock.recvfrom(65536)
-                data_buffer.extend(packet)
+            # 1. Recebe o tamanho do frame enviado pela Raspberry Pi (4 bytes)
+            message_size_data = sock.recv(4)
+            if not message_size_data:
+                print(f"[{Colors.YELLOW}Rede{Colors.RESET}] A Raspberry Pi encerrou a conexão.")
+                break
                 
-                try:
-                    # Tenta desserializar o buffer acumulado. 
-                    # Se faltarem pedaços, isto gera um erro e vai para o "except"
-                    data = pickle.loads(data_buffer)
-                    
-                    # Se funcionou, esvazia o buffer para preparar para o próximo frame
-                    data_buffer.clear()
-    
-                    # Extrai os dados do dicionário enviado pela Rasp
-                    original_bytes = data['original_frame']
-                    anomaly_bytes = data['anomaly_map']
-                    score = data['score']
-    
-                    # Decodifica os bytes JPEG de volta para Matrizes de Imagem (OpenCV)
-                    original_img = cv2.imdecode(np.frombuffer(original_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-                    anomaly_img = cv2.imdecode(np.frombuffer(anomaly_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-    
-                    if original_img is not None and anomaly_img is not None:
-                        # Junta a imagem contornada com o mapa de calor
-                        combined_frame = np.hstack((original_img, anomaly_img))
-                        
-                        # Escreve o Score recebido por cima da imagem
-                        color = (0, 0, 255) if score >= 0.5 else (0, 255, 0)
-                        cv2.putText(combined_frame, f"Score: {score:.4f}", (10, 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-    
-                        cv2.imshow("Inferencia Nativa (Raspberry Pi)", combined_frame)
-    
-                    # Sai se premir 'q'
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print(f"{Colors.YELLOW}Saindo da visualização...{Colors.RESET}")
-                        break
-                        
-                except (pickle.UnpicklingError, EOFError):
-                    # O pacote Pickle ainda está incompleto. Faltam pedaços UDP chegarem.
-                    # PROTEÇÃO: Se um pedaço se perder na rede, o buffer vai acumular lixo
-                    # infinitamente e nunca mais vai abrir. Se passar de 500KB, limpamos o lixo!
-                    if len(data_buffer) > 500000:
-                        data_buffer.clear()
-                    pass
-                    
-            except socket.timeout:
-                # Se ficar 2 segundos sem receber nada, limpa eventuais lixos no buffer
-                if len(data_buffer) > 0:
-                    data_buffer.clear()
+            message_size = struct.unpack("!I", message_size_data)[0]
+
+            # 2. Recebe os bytes exatos do frame JPEG comprimido
+            image_data = bytearray()
+            while len(image_data) < message_size:
+                packet = sock.recv(min(message_size - len(image_data), 4096))
+                if not packet:
+                    break
+                image_data.extend(packet)
+
+            if not image_data:
+                break
+
+            # 3. Decodifica os bytes JPEG de volta para matriz numpy (OpenCV BGR)
+            np_arr = np.frombuffer(image_data, dtype=np.uint8)
+            combined_frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            if combined_frame is None:
                 continue
 
-    except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}Visualização encerrada por Ctrl+C.{Colors.RESET}")
+            combined_frame = cv2.resize(combined_frame, (640*2, 640), interpolation=cv2.INTER_LINEAR)
+            
+            # 4. Exibe a janela de visualização em tempo real no PC
+            cv2.imshow("Inferencia Nativa - Raspberry Pi (Original | Mapa de Calor)", combined_frame)
+
+            # 5. Verifica se o operador apertou 'q' para sair
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print(f"{Colors.YELLOW}Encerrando visualização a pedido do usuário...{Colors.RESET}")
+                try:
+                    sock.sendall(b'Q') # Avisa a Pi para parar
+                except Exception:
+                    pass
+                break
+
+    except (ConnectionResetError, BrokenPipeError):
+        print(f"\n{Colors.RED}Conexão perdida com a Raspberry Pi.{Colors.RESET}")
+    except Exception as e:
+        print(f"\n{Colors.RED}Erro inesperado no PC: {e}{Colors.RESET}")
     finally:
         cv2.destroyAllWindows()
-        sock.close()
-        
+        print(f"{Colors.CYAN}Janelas do OpenCV fechadas e recursos liberados.{Colors.RESET}")
