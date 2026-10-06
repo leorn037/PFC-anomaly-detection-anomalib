@@ -268,7 +268,8 @@ def receive_model_from_pc(sock: socket.socket, output_dir: str):
             print(f"{Colors.BLUE}Recebendo '{filename}': 0.00% [0 / {file_size//1024} KB]{Colors.RESET}", end="\r")
             with open(file_path, 'wb') as f:
                 while bytes_received < file_size:
-                    chunk = sock.recv(4096)
+                    a_ler = min(4096, file_size - bytes_received)
+                    chunk = sock.recv(a_ler)
                     if not chunk:
                         break
                     f.write(chunk)
