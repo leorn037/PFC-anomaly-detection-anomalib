@@ -58,10 +58,10 @@ def inferir_frame(compiled_model, output_layer, espera_nchw, frame_bgr):
         input_tensor = np.expand_dims(frame_float, 0)
 
     results = compiled_model([input_tensor])
-    print(3)
+
     # Extrai a matriz da camada selecionada
     anomaly_map = np.squeeze(results[output_layer])
-    print(4)    
+    
     # Se o anomaly_map tiver o shape correto (ex: 256x256), o score é o valor máximo dele
     if anomaly_map.ndim >= 2:
         pred_score = float(np.max(anomaly_map))

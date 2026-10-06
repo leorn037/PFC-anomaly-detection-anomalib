@@ -207,7 +207,21 @@ def send_model_to_pi(openvino_dir: Path, sock: socket.socket):
             return
 
     try:
-        # 2. Envia o tamanho e o cabeçalho primeiro
+        # --- 1. HANDSHAKE 'R' ---
+        print(f"[{Colors.CYAN}SYNC-PC{Colors.RESET}] Enviando handshake 'R' para a Pi...")
+        sock.sendall(b'R')
+        
+        sock.settimeout(10.0) # Espera no máximo 10s pelo ACK da Pi
+        response = sock.recv(3).decode().strip()
+        
+        if response != "ACK":
+            print(f"[{Colors.RED}SYNC-PC{Colors.RESET}] Resposta inválida: {response}. Cancelando envio.")
+            return
+            
+        print(f"[{Colors.GREEN}SYNC{Colors.RESET}] ACK recebido! Iniciando transferência dos arquivos...")
+        sock.settimeout(None) # Remove timeout para não cortar o envio de arquivos grandes
+
+        # --- 2. ENVIO DOS ARQUIVOS ---
         sock.sendall(struct.pack("!I", len(files_to_send)))
         
         # 3. Envia o arquivo em blocos diretamente do disco
@@ -230,6 +244,7 @@ def send_model_to_pi(openvino_dir: Path, sock: socket.socket):
         
     except Exception as e:
         print(f"{Colors.RED}Erro ao enviar o modelo: {e}{Colors.RESET}")
+
 def receive_model_from_pc(sock: socket.socket, output_dir: str):
     """
     Escuta por um pacote de modelo e configurações, salva o modelo
@@ -246,7 +261,26 @@ def receive_model_from_pc(sock: socket.socket, output_dir: str):
     output_path.mkdir(parents=True, exist_ok=True)
     
     try:
-        print(f"{Colors.BLUE}Aguardando envio do modelo OpenVINO pela conexão TCP ativa...{Colors.RESET}")
+        print(f"\n[{Colors.CYAN}SYNC-PI{Colors.RESET}] Aguardando handshake 'R' do PC (pode demorar devido ao treino)...")
+        
+        # --- 1. HANDSHAKE (Espera bloqueante direta) ---
+        sock.settimeout(None) # O código congela aqui naturalmente até o PC enviar algo
+        
+        command_bytes = sock.recv(1)
+        if not command_bytes:
+            print(f"[{Colors.RED}Rede{Colors.RESET}] PC desconectou durante a espera.")
+            return None
+        
+        command = command_bytes.decode().strip()
+        
+        # Avalia o que recebeu:
+        if command == 'R':
+            print(f"\n[{Colors.GREEN}SYNC{Colors.RESET}] Comando 'R' recebido. Enviando ACK...")
+            sock.sendall(b'ACK')
+        else:
+            print(f"[{Colors.RED}SYNC-ERRO{Colors.RESET}] Esperava 'R', mas recebeu o comando '{command}'. Abortando receção do modelo.")
+            sock.sendall(b'NAK')
+            return None # Sai da função imediatamente, retornando None
 
         start_time = time.time()
 

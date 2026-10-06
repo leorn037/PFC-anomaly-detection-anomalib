@@ -81,9 +81,9 @@ def receive_model(config, conn):
     if config["receive_model"]:
         start_time = time.time()
         from network import receive_model_from_pc   #TODO
-        xml_received = receive_model_from_pc(conn, config["model_output_dir"])
+        xml_path = receive_model_from_pc(conn, config["model_output_dir"])
 
-        if xml_received:
+        if xml_path:
             print(f"{Colors.BLUE}Modelo (OpenVINO) recebido em {time.time()-start_time:.2f}s.{Colors.RESET}")
         else:
             print(f"{Colors.RED}Falha ao receber o modelo do PC.{Colors.RESET}")
