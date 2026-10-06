@@ -239,7 +239,7 @@ def send_model_to_pi(openvino_dir: Path, config: dict):
     except Exception as e:
         print(f"{Colors.RED}Erro ao enviar o modelo: {e}{Colors.RESET}")
 
-def receive_model_from_pc(server_port: int, output_dir: str):
+def receive_model_from_pc(sock: socket.socket, output_dir: str):
     """
     Escuta por um pacote de modelo e configurações, salva o modelo
     e retorna as configurações para o script principal.
@@ -254,57 +254,55 @@ def receive_model_from_pc(server_port: int, output_dir: str):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-        server_sock.bind(('0.0.0.0', server_port))
-        server_sock.listen(1)
-        
+    try:
+        print(f"{Colors.BLUE}Aguardando envio do modelo OpenVINO pela conexão TCP ativa...{Colors.RESET}")
+
         start_time = time.time()
-        print(f"{Colors.BLUE}Aguardando o modelo do PC na porta {server_port}...{Colors.RESET}")
-        conn, addr = server_sock.accept()
         
-        with conn:
-            print(f"{Colors.GREEN}Conexão aceita de {addr}. Recebendo arquivos...{Colors.RESET}")
+        # 1. Recebe o tamanho do cabeçalho
+        num_files_data = sock.recv(4)
+        if not num_files_data:
+            print(f"{Colors.RED}Erro: Conexão encerrada antes de receber o cabeçalho.{Colors.RESET}")
+            return None
+        num_files = struct.unpack("!I", num_files_data)[0]
 
-            # 1. Recebe o tamanho do cabeçalho
-            num_files_data = conn.recv(4)
-            if not num_files_data:
-                print(f"{Colors.RED}Erro: Conexão encerrada antes de receber o cabeçalho.{Colors.RESET}")
+        xml_path = None
+        for _ in range(num_files):
+            header_size = struct.unpack("!I", sock.recv(4))[0]
+            header = sock.recv(header_size).decode().split('|')
+            filename, file_size = header[0], int(header[1])
+
+            file_path = output_path / filename
+            bytes_received = 0
+            print(f"{Colors.BLUE}Recebendo '{filename}': 0.00% [0 / {file_size//1024} KB]{Colors.RESET}", end="\r")
+            with open(file_path, 'wb') as f:
+                while bytes_received < file_size:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    bytes_received += len(chunk)
+                    if bytes_received % 102400 == 0 or bytes_received == file_size:
+                        progress = (bytes_received / file_size) * 100
+                        print(f"{Colors.BLUE}Recebendo '{filename}': {progress:.2f}% "
+                                f"[{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
+
+            if bytes_received != file_size:
+                print(f"\n{Colors.YELLOW}Aviso: '{filename}' incompleto ({bytes_received}/{file_size} bytes).{Colors.RESET}")
                 return None
-            num_files = struct.unpack("!I", num_files_data)[0]
 
-            xml_path = None
-            for _ in range(num_files):
-                header_size = struct.unpack("!I", conn.recv(4))[0]
-                header = conn.recv(header_size).decode().split('|')
-                filename, file_size = header[0], int(header[1])
+            print(f"\n{Colors.GREEN}'{filename}' recebido com sucesso!{Colors.RESET}")
+            if filename == "model.xml":
+                xml_path = file_path
 
-                file_path = output_path / filename
-                bytes_received = 0
-                print(f"{Colors.BLUE}Recebendo '{filename}': 0.00% [0 / {file_size//1024} KB]{Colors.RESET}", end="\r")
-                with open(file_path, 'wb') as f:
-                    while bytes_received < file_size:
-                        chunk = conn.recv(4096)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        bytes_received += len(chunk)
-                        if bytes_received % 102400 == 0 or bytes_received == file_size:
-                            progress = (bytes_received / file_size) * 100
-                            print(f"{Colors.BLUE}Recebendo '{filename}': {progress:.2f}% "
-                                  f"[{bytes_received//1024} / {file_size//1024} KB]{Colors.RESET}", end="\r")
+        receive_time = time.time() - start_time
+        print(f"{Colors.GREEN}Todos os arquivos recebidos em {receive_time:.2f}s!{Colors.RESET}")
+        return xml_path
 
-                if bytes_received != file_size:
-                    print(f"\n{Colors.YELLOW}Aviso: '{filename}' incompleto ({bytes_received}/{file_size} bytes).{Colors.RESET}")
-                    return None
-
-                print(f"\n{Colors.GREEN}'{filename}' recebido com sucesso!{Colors.RESET}")
-                if filename == "model.xml":
-                    xml_path = file_path
-
-            receive_time = time.time() - start_time
-            print(f"{Colors.GREEN}Todos os arquivos recebidos em {receive_time:.2f}s!{Colors.RESET}")
-            return xml_path
-
+    except Exception as e:
+        print(f"{Colors.RED}Erro ao receber o modelo via TCP: {e}{Colors.RESET}")
+        return None
+    
 def live_inference_rasp_to_pc(picam2, conn, image_size, anomaly_output = None, move_output = None):
     """
     Captura frames, envia para um PC para inferência e recebe o resultado.

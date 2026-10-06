@@ -86,6 +86,7 @@ def anomaly_args(config, mode="rasp"):
         ("live", bool, "Habilita a inferência das imagens em tempo real"),
         ("network_inference", bool, "Habilita a inferência das imagens via PC e retorna resultado para a Rasp"),
         ("use_openvino", bool, "Habilita ou desabilita o OpenVINO (True/False)"),
+        ("receive_model", bool, "Habilita o envio do modelo via rede para a rasp (True/False)"),
     ]
 
     rasp_args = [
@@ -153,7 +154,7 @@ def print_config_summary(config: dict, mode: str = "rasp"):
             "receive_model", "live", "network_inference",
             ]
     else: 
-        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "live", "network_inference", "use_openvino" ]
+        keys_to_show = [ "pi_ip", "collect", "img_n", "model_name", "operation_mode", "live", "network_inference", "use_openvino", "receive_model" ]
 
     # 2. Crie uma string de separação para o cabeçalho
     separator = f"{Colors.CYAN}{'-'*40}{Colors.RESET}"
