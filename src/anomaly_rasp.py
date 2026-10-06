@@ -69,7 +69,7 @@ def collect_dataset(camera, conn, config):
     return ret == "DISCONNECTED"
 
 
-def receive_model(config, port):
+def receive_model(config, conn):
     """
     Garante que o model.xml/model.bin estejam disponíveis localmente: busca do
     PC via rede se receive_model=True, ou só confirma o que já está lá se
@@ -81,7 +81,7 @@ def receive_model(config, port):
     if config["receive_model"]:
         start_time = time.time()
         from network import receive_model_from_pc   #TODO
-        xml_received = receive_model_from_pc(port, config["model_output_dir"])
+        xml_received = receive_model_from_pc(conn, config["model_output_dir"])
 
         if xml_received:
             print(f"{Colors.BLUE}Modelo (OpenVINO) recebido em {time.time()-start_time:.2f}s.{Colors.RESET}")
@@ -138,7 +138,7 @@ def main(camera):
         
         # 3. Recebimento de modelo
         if not config["network_inference"]:   #TODO: Função de receber modelo
-            receive_model(config, config["pi_port"])
+            receive_model(config, conn)
 
         # 3. Recebimento de modelo
         if not config["network_inference"]:
