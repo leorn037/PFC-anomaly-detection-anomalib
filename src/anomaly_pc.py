@@ -73,7 +73,7 @@ def train_and_evaluate(config, model, datamodule):
     # Se não for modo Train ou não usou OpenVINO, retorna o modelo original (PyTorch)
     return model
 
-def send_trained_model(config):
+def send_trained_model(config, sock):
     """Resgata modelo treinado e envia para Pi se configurado."""
 
     # Encontre o caminho do checkpoint mais recente
@@ -81,11 +81,11 @@ def send_trained_model(config):
     model_path = get_latest_checkpoint(results_path)
 
     # Procura a pasta OpenVINO exportada correspondente ao checkpoint
-    openvino_dir = model_path.parent.parent / "openvino" / "model" # Ajuste o caminho se necessário para onde estão o .xml e .bin
-    
+    openvino_dir = model_path.parent.parent / "openvino" # Ajuste o caminho se necessário para onde estão o .xml e .bin
+
     if openvino_dir.exists() and config["receive_model"] and config["live"]:
         #TODO: Usar modelo openvino para inferencia na rasp
-        send_model_to_pi(openvino_dir, config, MODEL_CONFIGS)
+        send_model_to_pi(openvino_dir, sock)
 
 def run_inference(config, model, sock):
     """Executa inferência baseada na configuração."""
@@ -122,7 +122,7 @@ def main():
         
         # 5. Envio do modelo para Raspberry se configurado
         #TODO: Usar modelo openvino para inferencia na rasp
-        send_trained_model(config)
+        send_trained_model(config, sock)
         
         # 6. Inferência/Visualização
         run_inference(config, model, sock)

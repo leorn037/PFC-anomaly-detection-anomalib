@@ -191,7 +191,7 @@ def receive_all_images_and_save(num_images: int, save_path: Path, sock: socket.s
     cv2.destroyAllWindows()
 
 # Função para enviar o modelo
-def send_model_to_pi(openvino_dir: Path, config: dict):
+def send_model_to_pi(openvino_dir: Path, sock: socket.socket):
     """
     Envia model.xml + model.bin para a Raspberry Pi via socket TCP.
 
@@ -199,8 +199,6 @@ def send_model_to_pi(openvino_dir: Path, config: dict):
         openvino_dir (Path): Pasta onde estão model.xml e model.bin.
         config (dict): O dicionário de configuração principal (usa pi_ip, pi_port).
     """
-    pi_ip = config["pi_ip"]
-    pi_port = config["pi_port"]
     files_to_send = [openvino_dir / "model.xml", openvino_dir / "model.bin"]
 
     for file_path in files_to_send:
@@ -209,36 +207,29 @@ def send_model_to_pi(openvino_dir: Path, config: dict):
             return
 
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            print(f"{Colors.BLUE}Conectando à Raspberry Pi em {pi_ip}:{pi_port} para enviar o modelo...{Colors.RESET}")
-            sock.connect((pi_ip, pi_port))
+        # 2. Envia o tamanho e o cabeçalho primeiro
+        sock.sendall(struct.pack("!I", len(files_to_send)))
+        
+        # 3. Envia o arquivo em blocos diretamente do disco
+        for file_path in files_to_send:
+            file_size = os.path.getsize(file_path)
+            header = f"{file_path.name}|{file_size}".encode()
+            sock.sendall(struct.pack("!I", len(header)) + header)
 
-            # 2. Envia o tamanho e o cabeçalho primeiro
-            sock.sendall(struct.pack("!I", len(files_to_send)))
-            
-            # 3. Envia o arquivo em blocos diretamente do disco
-            for file_path in files_to_send:
-                file_size = os.path.getsize(file_path)
-                header = f"{file_path.name}|{file_size}".encode()
-                sock.sendall(struct.pack("!I", len(header)) + header)
+            print(f"Iniciando envio do arquivo '{file_path.name}' ({file_size} bytes)...")
+            with open(file_path, 'rb') as f:
+                while True:
+                    bytes_read = f.read(4096)
+                    if not bytes_read:
+                        break
+                    sock.sendall(bytes_read)
+                    
+            print(f"{Colors.GREEN}'{file_path.name}' enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
 
-                print(f"Iniciando envio do arquivo '{file_path.name}' ({file_size} bytes)...")
-                with open(file_path, 'rb') as f:
-                    while True:
-                        bytes_read = f.read(4096)
-                        if not bytes_read:
-                            break
-                        sock.sendall(bytes_read)
-                        
-                print(f"{Colors.GREEN}'{file_path.name}' enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
-
-            print(f"{Colors.GREEN}Modelo enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
-            
-    except ConnectionRefusedError:
-        print(f"{Colors.RED}Erro: Raspberry Pi {pi_ip} recusou a conexão. Verifique se o servidor de recepção está rodando.{Colors.RESET}")
+        print(f"{Colors.GREEN}Modelo enviado com sucesso! Tamanho: {file_size} bytes.{Colors.RESET}")
+        
     except Exception as e:
         print(f"{Colors.RED}Erro ao enviar o modelo: {e}{Colors.RESET}")
-
 def receive_model_from_pc(sock: socket.socket, output_dir: str):
     """
     Escuta por um pacote de modelo e configurações, salva o modelo
@@ -258,7 +249,7 @@ def receive_model_from_pc(sock: socket.socket, output_dir: str):
         print(f"{Colors.BLUE}Aguardando envio do modelo OpenVINO pela conexão TCP ativa...{Colors.RESET}")
 
         start_time = time.time()
-        
+
         # 1. Recebe o tamanho do cabeçalho
         num_files_data = sock.recv(4)
         if not num_files_data:

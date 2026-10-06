@@ -137,12 +137,8 @@ def main(camera):
             return True  # Se desconectar durante a funçãomanda reiniciar a main
         
         # 3. Recebimento de modelo
-        if not config["network_inference"]:   #TODO: Função de receber modelo
-            receive_model(config, conn)
-
-        # 3. Recebimento de modelo
         if not config["network_inference"]:
-            model = receive_model(config, config["pi_port"])
+            model = receive_model(config, conn)
             if model is None:
                 print(f"{Colors.RED}Impossível prosseguir sem modelo.{Colors.RESET}")
                 return False

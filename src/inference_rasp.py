@@ -118,9 +118,8 @@ def live_inference_rasp_lite(config, camera, model_xml_path, conn, anomaly_outpu
 
             # 3. Executa a inferência OpenVINO
             t_start_inf = time.time()
-            #!anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
-            pred_score = 0.0
-            anomaly_map = cv2.cvtColor(frame_processed, cv2.COLOR_BGR2GRAY) * 0.0
+            anomaly_map, pred_score = inferir_frame(compiled_model, output_layer, espera_nchw, frame_processed)
+            #!pred_score, anomaly_map = 0.0, cv2.cvtColor(frame_processed, cv2.COLOR_BGR2GRAY) * 0.0
             t_inf_duration = time.time() - t_start_inf
 
             is_anomaly = pred_score >= threshold
